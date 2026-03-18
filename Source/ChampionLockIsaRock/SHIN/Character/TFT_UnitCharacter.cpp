@@ -8,6 +8,8 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	
+	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+	
 	StatComponent = CreateDefaultSubobject<UTFT_StatComponent>(TEXT("StatComponent"));
 	SkillComponent = CreateDefaultSubobject<UTFT_SkillComponent>(TEXT("SkillComponent"));
 }
