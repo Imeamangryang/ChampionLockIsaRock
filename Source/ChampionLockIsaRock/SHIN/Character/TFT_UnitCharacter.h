@@ -54,4 +54,8 @@ public:
 	// Skill Component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class UTFT_SkillComponent* SkillComponent;
+	
+	// Combat Component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	class UTFT_CombatComponent* CombatComponent;
 };
