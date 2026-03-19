@@ -1,6 +1,8 @@
 ﻿#include "TFT_UnitCharacter.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "TFT_StatComponent.h"
 #include "TFT_SkillComponent.h"
+#include "TFT_CombatComponent.h"
 #include "../Struct/FTFT_ChampionData.h"
 #include "../GameFramework/TFT_GameInstance.h"
 
@@ -9,9 +11,12 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 	
 	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
 	
 	StatComponent = CreateDefaultSubobject<UTFT_StatComponent>(TEXT("StatComponent"));
 	SkillComponent = CreateDefaultSubobject<UTFT_SkillComponent>(TEXT("SkillComponent"));
+	CombatComponent = CreateDefaultSubobject<UTFT_CombatComponent>(TEXT("CombatComponent"));
 }
 
 void ATFT_UnitCharacter::BeginPlay()
@@ -35,6 +40,9 @@ void ATFT_UnitCharacter::BeginPlay()
 	
 	// 메시 & 애니메이션 블루프린트 설정
 	InitializeMesh();
+	
+	// combat component에 owner 캐릭터 설정
+	CombatComponent->OwnerCharacter = this;
 }
 
 void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)

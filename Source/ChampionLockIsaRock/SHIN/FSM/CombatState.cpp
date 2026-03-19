@@ -13,15 +13,25 @@ void FSearchingState::Enter(UTFT_CombatComponent* Combat)
 
 void FSearchingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
 {
-    if (Combat->HasTarget())
+    if (!Combat->HasTarget())
     {
-        Combat->ChangeState(Combat->GetMovingState(), ECombatState::Moving);
-    }
-    else
-    {
-        // 타겟이 없으면 계속 찾음
         Combat->FindTarget();
+        return;
     }
+
+    if (Combat->IsManaFull())
+    {
+        Combat->ChangeState(Combat->GetCastingSkillState(), ECombatState::CastingSkill);
+        return;
+    }
+
+    if (Combat->IsTargetInRange())
+    {
+        Combat->ChangeState(Combat->GetAttackingState(), ECombatState::Attacking);
+        return;
+    }
+
+    Combat->ChangeState(Combat->GetMovingState(), ECombatState::Moving);
 }
 
 void FMovingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)

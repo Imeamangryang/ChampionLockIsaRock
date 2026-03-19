@@ -15,6 +15,10 @@ class CHAMPIONLOCKISAROCK_API ATFT_UnitCharacter : public ACharacter
 
 public:
 	ATFT_UnitCharacter();
+	
+	// Champion Name을 FString으로 반환
+	FString GetChampionNameString();
+	static FString BuildMeshPath(const FString& Name);
 
 protected:
 	virtual void BeginPlay() override;
@@ -30,9 +34,7 @@ protected:
 	static FStruct_TFT_Champion ConvertToChampionData(const FTFT_ChampionData& Data);
 	static FName ConvertEnumToRowName(ETFT_ChampionKey Key);
 	
-	// Champion Name을 FString으로 반환
-	FString GetChampionNameString();
-	static FString BuildMeshPath(const FString& Name);
+
 
 public:
 	virtual void Tick(float DeltaTime) override;

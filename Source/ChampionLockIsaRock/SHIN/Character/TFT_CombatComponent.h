@@ -26,7 +26,10 @@ class CHAMPIONLOCKISAROCK_API UTFT_CombatComponent : public UActorComponent
 public:
 	UTFT_CombatComponent();
 	
+	UFUNCTION(BlueprintCallable)
 	void StartCombat();
+	
+	UFUNCTION(BlueprintCallable)
 	void EndCombat();
 
 protected:
