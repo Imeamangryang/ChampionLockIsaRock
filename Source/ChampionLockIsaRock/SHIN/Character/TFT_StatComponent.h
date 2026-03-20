@@ -15,6 +15,10 @@ public:
 	UTFT_StatComponent();
 	
 	void Initialize(const FStruct_TFT_Champion& Data, int32 StarLevel);
+	
+	void ApplyDamage(int32 Damage);
+	void AddMana(int32 ManaAmount);
+	
 
 protected:
 	// Called when the game starts

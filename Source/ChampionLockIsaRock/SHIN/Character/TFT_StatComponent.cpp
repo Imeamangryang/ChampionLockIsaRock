@@ -41,3 +41,16 @@ void UTFT_StatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
+void UTFT_StatComponent::ApplyDamage(int32 Damage)
+{
+	Health -= Damage;
+	if (Health < 0) Health = 0;
+}
+
+void UTFT_StatComponent::AddMana(int32 ManaAmount)
+{
+	StartingMana += ManaAmount;
+	if (StartingMana > MaxMana) StartingMana = MaxMana;
+}
+
+

@@ -253,21 +253,19 @@ void UTFT_CombatComponent::AttackTarget()
 	// TODO: 여기에 실제 공격 처리 추가
 	// 1. 공격 애니메이션 재생 
 	OwnerCharacter->PlayAttackMontageByInterval(AttackRate);
+	
 	// 2. 대상 HP 감소
+	const float Damage = OwnerCharacter->StatComponent->AttackDamage;
+	CurrentTarget->StatComponent->ApplyDamage(Damage);
+	
+	UE_LOG(LogTemp, Log, TEXT("%s dealt %.1f damage to %s (Target HP: %d)"),
+		*OwnerCharacter->GetChampionNameString(),
+		Damage,
+		*CurrentTarget->GetChampionNameString(),
+		CurrentTarget->StatComponent->Health);
+	
 	// 3. 마나 획득
-
-	// 예: StatComponent가 나중에 이런 함수를 가진다면
-	// if (CurrentTarget->StatComponent)
-	// {
-	//     const float Damage = 10.f;
-	//     CurrentTarget->StatComponent->ApplyDamage(Damage);
-	// }
-
-	// 예: 마나 증가
-	// if (OwnerCharacter->StatComponent)
-	// {
-	//     OwnerCharacter->StatComponent->AddMana(10.f);
-	// }
+	OwnerCharacter->StatComponent->AddMana(10.f);
 }
 
 void UTFT_CombatComponent::CastSkill()
@@ -300,9 +298,11 @@ void UTFT_CombatComponent::ResetAttackTimer()
 
 void UTFT_CombatComponent::StopAllActions()
 {
-	if (OwnerCharacter && OwnerCharacter->GetController())
+	if (OwnerCharacter)
 	{
-		OwnerCharacter->GetController()->StopMovement();
+		// 사망 애니메이션 재생
+		
+		// 액터 삭제
 	}
 }
 
