@@ -52,7 +52,7 @@ public:
 
 	// ===== Combat Data =====
 	float AttackRange;
-	float AttackInterval;
+	float AttackRate;
 	float CurrentAttackTimer = 0.f;
 
 	// ===== Core Logic =====

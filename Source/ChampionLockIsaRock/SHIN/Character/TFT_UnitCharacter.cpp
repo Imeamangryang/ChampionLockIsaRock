@@ -5,6 +5,7 @@
 #include "TFT_CombatComponent.h"
 #include "../Struct/FTFT_ChampionData.h"
 #include "../GameFramework/TFT_GameInstance.h"
+#include "Components/CapsuleComponent.h"
 
 ATFT_UnitCharacter::ATFT_UnitCharacter()
 {
@@ -13,6 +14,8 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
+	
+	// 
 	
 	StatComponent = CreateDefaultSubobject<UTFT_StatComponent>(TEXT("StatComponent"));
 	SkillComponent = CreateDefaultSubobject<UTFT_SkillComponent>(TEXT("SkillComponent"));
@@ -141,6 +144,20 @@ void ATFT_UnitCharacter::InitializeMesh()
 		GetMesh()->SetAnimInstanceClass(nullptr);
 		UE_LOG(LogTemp, Warning, TEXT("Failed to load animation blueprint: %s"), *AnimPath);
 	}
+	
+	FString MontagePath = FString::Printf(
+	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%sAttack_Montage.%sAttack_Montage"), *Name, *Name, *Name);
+
+	UAnimMontage* Montage = LoadObject<UAnimMontage>(nullptr, *MontagePath);
+
+	if (Montage)
+	{
+		AttackMontage = Montage;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to load Attack Montage: %s"), *MontagePath);
+	}
 }
 
 FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_ChampionData& Data)
@@ -205,4 +222,40 @@ FString ATFT_UnitCharacter::BuildMeshPath(const FString& Name)
 	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s.%s"),
 	*Name, *Name, *Name
 );
+}
+
+void ATFT_UnitCharacter::PlayAttackMontageByInterval(float AttackRate)
+{
+	if (!AttackMontage)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no AttackMontage assigned."), *GetChampionNameString());
+		return;
+	}
+
+	if (AttackRate <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has invalid AttackRate: %f"), *GetChampionNameString(), AttackRate);
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
+		return;
+	}
+
+	const float MontageLength = AttackMontage->GetPlayLength();
+	if (MontageLength <= 0.f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s AttackMontage length is invalid."), *GetChampionNameString());
+		return;
+	}
+
+	// AttackRate = 초당 공격 횟수
+	// 공격 1회의 주기 = 1 / AttackRate
+	// 그 주기에 맞게 몽타주 재생속도 계산
+	const float PlayRate = MontageLength * AttackRate;
+
+	AnimInstance->Montage_Play(AttackMontage, PlayRate);
 }

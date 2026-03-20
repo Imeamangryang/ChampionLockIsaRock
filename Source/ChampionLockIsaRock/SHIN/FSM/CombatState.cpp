@@ -60,6 +60,7 @@ void FMovingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
 
 void FAttackingState::Enter(UTFT_CombatComponent* Combat)
 {
+    Combat->AttackTarget();
     Combat->ResetAttackTimer();
 }
 

@@ -1,6 +1,7 @@
 ﻿#include "TFT_CombatComponent.h"
 #include "TFT_UnitCharacter.h"
 #include "EngineUtils.h"
+#include "TFT_StatComponent.h"
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -17,8 +18,8 @@ UTFT_CombatComponent::UTFT_CombatComponent()
 
 	// TODO: 나중에는 StatComponent 또는 ChampionData에서 가져오도록 변경
 	AttackRange = 150.f;
-	AttackInterval = 1.0f;
-	CurrentAttackTimer = AttackInterval;
+	AttackRate = 1.0f;
+	CurrentAttackTimer = AttackRate;
 
 	CurrentTarget = nullptr;
 	CurrentState = ECombatState::Idle;
@@ -27,7 +28,7 @@ UTFT_CombatComponent::UTFT_CombatComponent()
 	UE_LOG(LogTemp, Log, TEXT("CombatComponent initialized for %s | Range: %.1f | Interval: %.2f"),
 		*OwnerCharacter->GetName(),
 		AttackRange,
-		AttackInterval);
+		AttackRate);
 }
 
 void UTFT_CombatComponent::StartCombat()
@@ -37,8 +38,12 @@ void UTFT_CombatComponent::StartCombat()
 	// 전투 시작 시점을 알리고, 타겟 탐색 상태로 전이
 	UE_LOG(LogTemp, Warning, TEXT("Combat Started for: %s"), *OwnerCharacter->GetChampionNameString());
 	
+	AttackRange = OwnerCharacter->StatComponent->AttackRange * 180.f;
+	AttackRate = OwnerCharacter->StatComponent->AttackSpeed;
+	
 	// Idle -> Searching으로 상태 변경 (FSM 가동 시작)
 	ChangeState(GetSearchingState(), ECombatState::Searching);
+	
 }
 
 void UTFT_CombatComponent::EndCombat()
@@ -59,10 +64,8 @@ void UTFT_CombatComponent::BeginPlay()
 		return;
 	}
 
-	// TODO: 나중에는 StatComponent 또는 ChampionData에서 가져오도록 변경
-	AttackRange = 150.f;
-	AttackInterval = 1.0f;
-	CurrentAttackTimer = AttackInterval;
+	// TODO: 나중에는 StatComponent 또는 ChampionData에서 가져오도록 변경;
+	CurrentAttackTimer = AttackRate;
 
 	CurrentTarget = nullptr;
 	CurrentState = ECombatState::Idle;
@@ -71,7 +74,7 @@ void UTFT_CombatComponent::BeginPlay()
 	UE_LOG(LogTemp, Log, TEXT("CombatComponent initialized for %s | Range: %.1f | Interval: %.2f"),
 	*OwnerCharacter->GetChampionNameString(),
 		AttackRange,
-		AttackInterval);
+		AttackRate);
 }
 
 void UTFT_CombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -248,8 +251,8 @@ void UTFT_CombatComponent::AttackTarget()
 		*CurrentTarget->GetChampionNameString());
 
 	// TODO: 여기에 실제 공격 처리 추가
-	// 예시:
 	// 1. 공격 애니메이션 재생 
+	OwnerCharacter->PlayAttackMontageByInterval(AttackRate);
 	// 2. 대상 HP 감소
 	// 3. 마나 획득
 
@@ -285,7 +288,14 @@ bool UTFT_CombatComponent::IsCasting() const
 
 void UTFT_CombatComponent::ResetAttackTimer()
 {
-	CurrentAttackTimer = AttackInterval;
+	if (AttackRate <= 0.f)
+	{
+		CurrentAttackTimer = 0.f;
+		return;
+	}
+
+	// AttackInterval은 "초당 공격 횟수"
+	CurrentAttackTimer = 1.0f / AttackRate;
 }
 
 void UTFT_CombatComponent::StopAllActions()

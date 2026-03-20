@@ -19,6 +19,8 @@ public:
 	// Champion Name을 FString으로 반환
 	FString GetChampionNameString();
 	static FString BuildMeshPath(const FString& Name);
+	
+	void  PlayAttackMontageByInterval(float AttackRate);
 
 protected:
 	virtual void BeginPlay() override;
@@ -60,4 +62,8 @@ public:
 	// Combat Component
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class UTFT_CombatComponent* CombatComponent;
+	
+	// Attack Montage
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	class UAnimMontage* AttackMontage;
 };
