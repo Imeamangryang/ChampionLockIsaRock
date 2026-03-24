@@ -1,9 +1,11 @@
 ﻿#include "CombatState.h"
-#include "SHIN/Character/TFT_CombatComponent.h"
+#include "SHIN/Character/Components/TFT_CombatComponent.h"
+#include "SHIN/Character/TFT_UnitCharacter.h"
 
 void FIdleState::Enter(UTFT_CombatComponent* Combat)
 {
-	Combat->StopAllActions();
+    Combat->CurrentTarget = nullptr;
+	// Combat->StopAllActions();
 }
 
 void FSearchingState::Enter(UTFT_CombatComponent* Combat)
@@ -16,7 +18,12 @@ void FSearchingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
     if (!Combat->HasTarget())
     {
         Combat->FindTarget();
-        return;
+
+        if (!Combat->HasTarget())
+        {
+            Combat->ChangeState(Combat->GetIdleState(), ECombatState::Idle);
+            return;
+        }
     }
 
     if (Combat->IsManaFull())
@@ -32,6 +39,14 @@ void FSearchingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
     }
 
     Combat->ChangeState(Combat->GetMovingState(), ECombatState::Moving);
+}
+
+void FMovingState::Enter(UTFT_CombatComponent* Combat)
+{
+    if (Combat && Combat->OwnerCharacter)
+	{
+		Combat->OwnerCharacter->StopMontage(0.15f);
+	}
 }
 
 void FMovingState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)

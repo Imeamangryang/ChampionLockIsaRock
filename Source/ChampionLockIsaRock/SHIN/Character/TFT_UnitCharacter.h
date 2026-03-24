@@ -20,7 +20,11 @@ public:
 	FString GetChampionNameString();
 	static FString BuildMeshPath(const FString& Name);
 	
-	void  PlayAttackMontageByInterval(float AttackRate);
+	void PlayAttackMontageByInterval(float AttackRate);
+	
+	void StopMontage(float BlendOutTime = 0.15f);
+	
+	void UpdateHPBarWidget();
 
 protected:
 	virtual void BeginPlay() override;
@@ -35,7 +39,6 @@ protected:
 	// FTFT_ChampionData -> FStruct_TFT_Champion 변환
 	static FStruct_TFT_Champion ConvertToChampionData(const FTFT_ChampionData& Data);
 	static FName ConvertEnumToRowName(ETFT_ChampionKey Key);
-	
 
 
 public:
@@ -63,7 +66,15 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class UTFT_CombatComponent* CombatComponent;
 	
+	// HPBar Widget
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	class UWidgetComponent* HPBarWidgetComponent;
+	
 	// Attack Montage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	class UAnimMontage* AttackMontage;
+	
+	// Enemy 여부 (적이면 true, 아군이면 false)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bIsEnemy = false;
 };

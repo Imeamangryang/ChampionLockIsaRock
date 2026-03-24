@@ -1,10 +1,11 @@
 ﻿#include "TFT_UnitCharacter.h"
-#include "GameFramework/CharacterMovementComponent.h"
-#include "TFT_StatComponent.h"
-#include "TFT_SkillComponent.h"
-#include "TFT_CombatComponent.h"
+#include "Components/TFT_StatComponent.h"
+#include "Components/TFT_SkillComponent.h"
+#include "Components/TFT_CombatComponent.h"
 #include "../Struct/FTFT_ChampionData.h"
 #include "../GameFramework/TFT_GameInstance.h"
+#include "Components/WidgetComponent.h"
+#include "UI/TFT_HPBarWidget.h"
 #include "Components/CapsuleComponent.h"
 
 ATFT_UnitCharacter::ATFT_UnitCharacter()
@@ -15,16 +16,38 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
 	
-	// 
-	
 	StatComponent = CreateDefaultSubobject<UTFT_StatComponent>(TEXT("StatComponent"));
 	SkillComponent = CreateDefaultSubobject<UTFT_SkillComponent>(TEXT("SkillComponent"));
 	CombatComponent = CreateDefaultSubobject<UTFT_CombatComponent>(TEXT("CombatComponent"));
+	
+	HPBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBarWidgetComponent"));
+	HPBarWidgetComponent->SetupAttachment(RootComponent);
+	HPBarWidgetComponent->SetRelativeLocation (FVector(0.f, 0.f, 120.f));
+	HPBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	
+	static ConstructorHelpers::FClassFinder<UUserWidget> HPBarWidgetClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_HealthBar.WBP_HealthBar_C")); 
+	if (HPBarWidgetClass.Succeeded())
+	{
+		HPBarWidgetComponent->SetWidgetClass(HPBarWidgetClass.Class);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to load HP Bar Widget class."));
+	}
+	
+	// Pawn끼리는 콜리전 무시
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
 }
 
 void ATFT_UnitCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	if (bIsEnemy)
+	{
+		// 적일 경우에도 피킹이 되지 않도록 무시
+		GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Ignore);
+	}
 	
 	// Data Table에서 Champion Data 가져오기
 	UTFT_GameInstance* GI = GetWorld()->GetGameInstance<UTFT_GameInstance>();
@@ -46,6 +69,15 @@ void ATFT_UnitCharacter::BeginPlay()
 	
 	// combat component에 owner 캐릭터 설정
 	CombatComponent->OwnerCharacter = this;
+	
+	// HP Bar Widget 연결
+	if (HPBarWidgetComponent)
+	{
+		if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+		{
+			HPWidget->SetOwnerCharacter(this);
+		}
+	}
 }
 
 void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
@@ -206,6 +238,38 @@ FName ATFT_UnitCharacter::ConvertEnumToRowName(ETFT_ChampionKey Key)
 	if (!EnumPtr) return NAME_None;
 
 	return FName(EnumPtr->GetNameStringByValue((int64)Key));
+}
+
+void ATFT_UnitCharacter::StopMontage(float BlendOutTime)
+{
+	if (!AttackMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	if (AnimInstance->Montage_IsPlaying(AttackMontage))
+	{
+		AnimInstance->Montage_Stop(BlendOutTime, AttackMontage);
+	}
+}
+
+void ATFT_UnitCharacter::UpdateHPBarWidget()
+{
+	if (!HPBarWidgetComponent)
+	{
+		return;
+	}
+
+	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	{
+		HPWidget->UpdateHPBar();
+	}
 }
 
 FString ATFT_UnitCharacter::GetChampionNameString()

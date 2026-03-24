@@ -27,7 +27,9 @@ class FSearchingState : public ICombatState
 
 class FMovingState : public ICombatState
 {
-	public: virtual void Tick(UTFT_CombatComponent* Combat, float DeltaTime) override;
+	public: 
+	virtual void Enter(UTFT_CombatComponent* Combat) override; 
+	virtual void Tick(UTFT_CombatComponent* Combat, float DeltaTime) override;
 };
 
 class FAttackingState : public ICombatState
