@@ -6,6 +6,9 @@
 #include "GameFramework/Actor.h"
 #include "GirdManager.generated.h"
 
+class ATFT_UnitCharacter;
+class ATopDownController;
+
 UCLASS()
 class CHAMPIONLOCKISAROCK_API AGirdManager : public AActor
 {
@@ -29,6 +32,10 @@ protected:
 	UPROPERTY()
 	UMaterialInstanceDynamic* GridMaterialMID;
 	
+	// 실제로 필드에 서 있는 유닛들을 담아둘 명단
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Grid|Data")
+	TArray<class ATFT_UnitCharacter*> DeployedUnits;
+	
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -47,8 +54,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hex Grid")
 	float HexSize = 100.0f; // 육각형 크기 (반지름)
 
-	// ★ 질문자님이 원하시던 바로 그 기능! 간격 조절 변수
+	// 간격 조절 변수
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hex Grid")
 	float TileGap = 15.0f;
- 
+	
+	// 필드에 배치된 유닛 리스트 반환
+	TArray<class ATFT_UnitCharacter*> GetDeployedUnits();
+	
+	// 필드 기물 등록 함수 (나중에 드롭할 때 사용)
+	void RegisterUnitToGrid(ATFT_UnitCharacter* Unit);
+	
+	// 그리드 데이터에서 유닛 제거
+	void ClearUnitFromGrid(ATFT_UnitCharacter* TargetUnit);
 };

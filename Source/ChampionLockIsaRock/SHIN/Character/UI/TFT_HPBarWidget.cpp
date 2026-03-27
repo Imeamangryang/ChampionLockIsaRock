@@ -6,6 +6,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "../TFT_UnitCharacter.h"
 #include "../Components/TFT_StatComponent.h"
+#include "SHIN/Subsystem/TFT_UISubsystem.h"
 #include "Styling/SlateTypes.h"
 
 void UTFT_HPBarWidget::NativeConstruct()
@@ -21,6 +22,7 @@ void UTFT_HPBarWidget::NativeConstruct()
 	}
 	
 	UpdateHPBar();
+	UpdateMPBar();
 	RefreshDividers();
 }
 
@@ -28,6 +30,7 @@ void UTFT_HPBarWidget::SetOwnerCharacter(ATFT_UnitCharacter* InOwnerCharacter)
 {
 	OwnerCharacter = InOwnerCharacter;
 	UpdateHPBar();
+	UpdateMPBar();
 	RefreshDividers();
 }
 
@@ -40,9 +43,34 @@ void UTFT_HPBarWidget::UpdateHPBar()
 
 	const float MaxHP = static_cast<float>(OwnerCharacter->StatComponent->MaxHealth);
 	const float CurrentHP = static_cast<float>(OwnerCharacter->StatComponent->Health);
-
-	const float Percent = MaxHP > 0.f ? CurrentHP / MaxHP : 0.f;
+	
+	UTFT_UISubsystem* UISubsystem = nullptr;
+	if (ULocalPlayer* LP = GetOwningLocalPlayer())
+	{
+		UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>();
+	}
+	
+	UISubsystem->BroadcastHPUpdate(OwnerCharacter, MaxHP, CurrentHP);
+	
+	const float Percent = CurrentHP / MaxHP;
 	HPProgressBar->SetPercent(Percent);
+}
+
+void UTFT_HPBarWidget::UpdateMPBar()
+{
+	const float MaxMP = static_cast<float>(OwnerCharacter->StatComponent->MaxMana);
+	const float CurrentMP = static_cast<float>(OwnerCharacter->StatComponent->StartingMana);
+	
+	UTFT_UISubsystem* UISubsystem = nullptr;
+	if (ULocalPlayer* LP = GetOwningLocalPlayer())
+	{
+		UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>();
+	}
+	
+	UISubsystem->BroadcastMPUpdate(OwnerCharacter, MaxMP, CurrentMP);
+	
+	const float Percent = CurrentMP / MaxMP;
+	MPProgressBar->SetPercent(Percent);
 }
 
 void UTFT_HPBarWidget::RefreshDividers()
@@ -60,8 +88,8 @@ void UTFT_HPBarWidget::RefreshDividers()
 		return;
 	}
 
-	const float BarWidth = 155.f;   // WidgetComponent DrawSize와 맞춰주는 값
-	const float BarHeight = 13.f;
+	const float BarWidth = 124.f;   // WidgetComponent DrawSize와 맞춰주는 값
+	const float BarHeight = 11.f;
 	const float DividerThickness = 3.f; // 기존 2.f보다 더 두껍게
 
 	for (int32 HPMark = HPPerDivider; HPMark < MaxHP; HPMark += HPPerDivider)

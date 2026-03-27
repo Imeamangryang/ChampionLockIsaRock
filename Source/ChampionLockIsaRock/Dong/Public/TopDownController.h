@@ -47,7 +47,7 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TFT_Input")
     class UInputAction* ZoomAction;
     //  카메라 수치 
-    // location -70.0, 1200, 1300
+    // location -70.0, -780, 630
     // rotation     0, -60, 90
     
     void OnGrabPressed(const FInputActionValue& Value);
@@ -68,11 +68,15 @@ public:
     
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TFT_Interaction")
     FVector OriginalLocation; // 기물을 들기 전 원래 위치 (스왑/복귀용)
+   
+    // 대기석에 있는 기물 목록 (전투 제외 대상)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT_Data")
+    TArray<ATFT_UnitCharacter*> BenchUnits;
 
 protected:
     float GrabStartTime = 0.0f; // 짧은 클릭 vs 꾹 누르기 판정용 시간 기록
 
-    void PerformDrop(); // 실제 좌표 계산 및 기물 내려놓기 로직
+    
 
 // =========================================================================
 // 3. 맵 매니저 (Grid & Bench) 캐싱
@@ -82,7 +86,6 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TFT_Managers")
     AGirdManager* CachedGridManager; 
     
-protected:
     // 맵에 배치된 대기석 매니저
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT_Managers")
     ABenchManager* CachedBenchManager;
@@ -91,10 +94,6 @@ protected:
 // 4. 데이터 및 상태 추적 (명단 관리)
 // =========================================================================
 protected:
-    // 대기석에 있는 기물 목록 (전투 제외 대상)
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT_Data")
-    TArray<ATFT_UnitCharacter*> BenchUnits;
-
     // 맵에 배치된 모든 기물의 초기 위치 (전투 종료 후 복귀용)
     UPROPERTY()
     TMap<ATFT_UnitCharacter*, FTransform> UnitHomeRegistry;
@@ -117,6 +116,8 @@ protected:
     
     UPROPERTY(EditAnywhere, Category = "TFT_FX")
     UNiagaraSystem* FXCursor; // 우클릭 시 생성될 바닥 이펙트
+    
+    void PerformDrop(); // 실제 좌표 계산 및 기물 내려놓기 로직
 
     void UpdateHighlightPosition(FVector MouseLoc); // 매 프레임 하이라이트 위치 갱신
 
@@ -134,4 +135,21 @@ public:
     // 특정 기물이 대기석 명단에 있는지 판별
     UFUNCTION(BlueprintPure, Category = "TFT_Bench")
     bool IsUnitOnBench(AActor* Unit) const; 
+    
+    // 커스텀 이벤트 역할을 할 함수
+    UFUNCTION(BlueprintCallable, Category = "TFT|Spawn")
+    void SpawnUnitFromBP();
+    
+    // [추가] 대기석 하이라이트 크기 조절
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
+    FVector BenchHighlightScale = FVector(1.0f, 1.0f, 1.0f);
+
+    // [추가] 붕 뜨는 느낌을 없애기 위한 Z축 높이 조절 (기존 20.0f에서 5.0f로 기본값 낮춤)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
+    float HighlightZOffset = 5.0f;
+protected:
+    // 블루프린트의 'SpawnActor' 노드에 있는 'Class' 핀 역할
+    // 에디터에서 BP_Unit을 여기에 넣어주면 됨
+    UPROPERTY(EditAnywhere, Category = "TFT|Spawn")
+    TSubclassOf<class ATFT_UnitCharacter> UnitClass;
 };

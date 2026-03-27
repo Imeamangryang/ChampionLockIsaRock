@@ -59,6 +59,7 @@ void UTFT_StatComponent::ApplyDamage(int32 Damage)
 		OwnerCharacter->UpdateHPBarWidget();
 	}
 	
+	
 	// DeadState 진입
 	if (Health == 0)
 	{
@@ -74,6 +75,11 @@ void UTFT_StatComponent::AddMana(int32 ManaAmount)
 {
 	StartingMana += ManaAmount;
 	if (StartingMana > MaxMana) StartingMana = MaxMana;
+	
+	if (ATFT_UnitCharacter* OwnerCharacter = Cast<ATFT_UnitCharacter>(GetOwner()))
+	{
+		OwnerCharacter->UpdateMPBarWidget();
+	}
 }
 
 

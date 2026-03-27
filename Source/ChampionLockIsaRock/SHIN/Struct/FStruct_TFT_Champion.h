@@ -23,10 +23,10 @@ struct FStruct_TFT_Champion
 	TSoftObjectPtr<UTexture2D> Image;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<FName> Origins;
+	FName Origins;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<FName> Classes;
+	FName Classes;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FStruct_TFT_Stats Stats;

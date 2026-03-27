@@ -25,16 +25,20 @@ public:
 	void StopMontage(float BlendOutTime = 0.15f);
 	
 	void UpdateHPBarWidget();
-
-protected:
-	virtual void BeginPlay() override;
-	
-	virtual void OnConstruction(const FTransform& Transform) override;
+	void UpdateMPBarWidget();
 	
 	// data 초기화
 	void Initialize(const FTFT_ChampionData& Data, int32 StarLevel);
 	
 	void InitializeMesh();
+	
+	void InitWithChampionKey(ETFT_ChampionKey InChampionKey, int32 InStarLevel);
+	
+
+protected:
+	virtual void BeginPlay() override;
+	
+	virtual void OnConstruction(const FTransform& Transform) override;
 	
 	// FTFT_ChampionData -> FStruct_TFT_Champion 변환
 	static FStruct_TFT_Champion ConvertToChampionData(const FTFT_ChampionData& Data);
@@ -77,4 +81,7 @@ public:
 	// Enemy 여부 (적이면 true, 아군이면 false)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsEnemy = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 starLevel = 1; 
 };

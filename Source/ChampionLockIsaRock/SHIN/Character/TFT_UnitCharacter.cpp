@@ -22,7 +22,7 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 	
 	HPBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBarWidgetComponent"));
 	HPBarWidgetComponent->SetupAttachment(RootComponent);
-	HPBarWidgetComponent->SetRelativeLocation (FVector(0.f, 0.f, 120.f));
+	HPBarWidgetComponent->SetRelativeLocation (FVector(0.f, 0.f, 150.f));
 	HPBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
 	
 	static ConstructorHelpers::FClassFinder<UUserWidget> HPBarWidgetClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_HealthBar.WBP_HealthBar_C")); 
@@ -49,35 +49,7 @@ void ATFT_UnitCharacter::BeginPlay()
 		GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Ignore);
 	}
 	
-	// Data Table에서 Champion Data 가져오기
-	UTFT_GameInstance* GI = GetWorld()->GetGameInstance<UTFT_GameInstance>();
-	UDataTable* Table = GI->ChampionDataTable.LoadSynchronous();
-	FName RowName = ConvertEnumToRowName(ChampionKey);
-
-	const FTFT_ChampionData* Data = Table->FindRow<FTFT_ChampionData>(RowName, TEXT(""));
-
-	if (!Data)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Row not found"));
-		return;
-	}
-
-	Initialize(*Data, 1);
-	
-	// 메시 & 애니메이션 블루프린트 설정
-	InitializeMesh();
-	
-	// combat component에 owner 캐릭터 설정
-	CombatComponent->OwnerCharacter = this;
-	
-	// HP Bar Widget 연결
-	if (HPBarWidgetComponent)
-	{
-		if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
-		{
-			HPWidget->SetOwnerCharacter(this);
-		}
-	}
+	InitWithChampionKey(ChampionKey, starLevel);
 }
 
 void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
@@ -192,6 +164,43 @@ void ATFT_UnitCharacter::InitializeMesh()
 	}
 }
 
+void ATFT_UnitCharacter::InitWithChampionKey(ETFT_ChampionKey InChampionKey, int32 InStarLevel)
+{
+	ChampionKey = InChampionKey;
+	starLevel = InStarLevel;
+	
+	// Data Table에서 Champion Data 가져오기
+	UTFT_GameInstance* GI = GetWorld()->GetGameInstance<UTFT_GameInstance>();
+	UDataTable* Table = GI->ChampionDataTable.LoadSynchronous();
+	FName RowName = ConvertEnumToRowName(ChampionKey);
+
+	const FTFT_ChampionData* Data = Table->FindRow<FTFT_ChampionData>(RowName, TEXT(""));
+
+	if (!Data)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Row not found"));
+		return;
+	}
+
+	Initialize(*Data, starLevel);
+	
+	// 메시 & 애니메이션 블루프린트 설정
+	InitializeMesh();
+	
+	// combat component에 owner 캐릭터 설정
+	CombatComponent->OwnerCharacter = this;
+	
+	// HP Bar Widget 연결
+	if (HPBarWidgetComponent)
+	{
+		if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+		{
+			HPWidget->SetOwnerCharacter(this);
+			HPWidget->BP_UpdateStarFrame(starLevel);
+		}
+	}
+}
+
 FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_ChampionData& Data)
 {
 	FStruct_TFT_Champion Result;
@@ -200,6 +209,8 @@ FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_Champi
 	Result.Name = Data.Name;
 	Result.Cost = Data.Cost;
 	Result.Image = Data.Image;
+	Result.Origins = FName(*Data.Origins);
+	Result.Classes = FName(*Data.Classes);
 
 	// Stats
 	Result.Stats.AttackDamage = Data.AttackDamage;
@@ -261,14 +272,17 @@ void ATFT_UnitCharacter::StopMontage(float BlendOutTime)
 
 void ATFT_UnitCharacter::UpdateHPBarWidget()
 {
-	if (!HPBarWidgetComponent)
-	{
-		return;
-	}
-
 	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
 	{
 		HPWidget->UpdateHPBar();
+	}
+}
+
+void ATFT_UnitCharacter::UpdateMPBarWidget()
+{
+	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	{
+		HPWidget->UpdateMPBar();
 	}
 }
 

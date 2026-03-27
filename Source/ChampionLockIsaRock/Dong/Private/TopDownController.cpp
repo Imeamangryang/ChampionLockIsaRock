@@ -1,18 +1,21 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Dong/Public/TopDownController.h"
+#include "Dong/Public/BenchManager.h"
+#include "Dong/Public/GirdManager.h"
+#include "Dong/Public/UnitManager.h"
 #include "Engine/HitResult.h"
 #include "EngineUtils.h"
+#include "Engine/LocalPlayer.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "../SHIN/Character/TFT_UnitCharacter.h"
-#include "Dong/Public/BenchManager.h"
-#include "Dong/Public/GirdManager.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 #include "NiagaraFunctionLibrary.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "../SHIN/Subsystem/TFT_UISubsystem.h"
 
 ATopDownController::ATopDownController()
 {
@@ -94,7 +97,7 @@ void ATopDownController::OnZoom(const FInputActionValue& Value)
 		if (SpringArm)
 		{
 			float NewLength = SpringArm->TargetArmLength + (ZoomValue * 100.0f);
-			SpringArm->TargetArmLength = FMath::Clamp(NewLength, 300.0f, 1200.0f);
+			SpringArm->TargetArmLength = FMath::Clamp(NewLength, 100.0f, 1200.0f);
 		}
 	}
 }
@@ -181,24 +184,32 @@ void ATopDownController::PerformDrop()
     	// 5. 유효한 타일에 놓았을 때
     	if (bIsValidDrop)
     	{
+    		// [무조건 실행] 일단 어디에 있든 대기석과 그리드 장부에서 이 유닛을 지웁니다 (이동 전 세탁)
+    		if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(GrabbedUnit);
+    		if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(GrabbedUnit);
+   
     		FVector DropLoc = FVector(FinalSnappedLoc.X, FinalSnappedLoc.Y, OriginalLocation.Z);
-
     		TArray<AActor*> OverlappedActors;
     		UKismetSystemLibrary::SphereOverlapActors(GetWorld(), DropLoc, 60.0f, {UEngineTypes::ConvertToObjectType(ECC_Pawn)}, ATFT_UnitCharacter::StaticClass(), {GrabbedUnit}, OverlappedActors);
-
+    		
     		if (OverlappedActors.Num() > 0)
     		{
-    			// [스왑 로직] 서로의 위치를 맞바꿈
+    			// 서로의 위치를 맞바꿈
     			ATFT_UnitCharacter* OtherUnit = Cast<ATFT_UnitCharacter>(OverlappedActors[0]);
-    			FVector OtherUnitLoc = OtherUnit->GetActorLocation();
+      
+    			// 상대방 유닛도 장부에서 일단 지워줍니다 (그래야 꼬이지 않음)
+    			if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(OtherUnit);
+    			if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(OtherUnit);
 
+    			FVector OtherUnitLoc = OtherUnit->GetActorLocation();
     			GrabbedUnit->SetActorLocation(FVector(OtherUnitLoc.X, OtherUnitLoc.Y, OriginalLocation.Z));
     			OtherUnit->SetActorLocation(OriginalLocation);
 
-    			if (bGoingToBench) BenchUnits.AddUnique(GrabbedUnit); else BenchUnits.Remove(GrabbedUnit);
-    			if (BenchUnits.Contains(OtherUnit)) BenchUnits.Remove(OtherUnit); 
-                
-    			// 스왑된 두 기물의 현재 위치를 주소록에 최신화
+    			// 상대방이 원래 내가 있던 자리(OriginalLocation)로 갔으니, 그 위치에 맞게 다시 등록
+    			// (이 부분은 'OriginalLocation'이 벤치였는지 그리드였는지 판별하는 로직이 필요하지만, 
+    			// 일단은 GrabbedUnit의 등록 로직을 따라가면 해결됩니다.)
+      
+    			// 스왑된 두 기물의 주소록 최신화
     			UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
     			UnitHomeRegistry.Add(OtherUnit, OtherUnit->GetActorTransform());
     		}
@@ -206,11 +217,25 @@ void ATopDownController::PerformDrop()
     		{
     			// 빈칸 이동 로직
     			GrabbedUnit->SetActorLocation(DropLoc);
-    			if (bGoingToBench) BenchUnits.AddUnique(GrabbedUnit); else BenchUnits.Remove(GrabbedUnit);
-                
-    			// 이동한 기물의 현재 위치를 주소록에 최신화!
-    			UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
     		}
+    		
+    		// [최종 등록] 이제 GrabbedUnit이 최종적으로 도착한 곳에 따라 장부에 기입!
+    		if (bGoingToBench && CachedBenchManager)
+    		{
+    			int32 NewSlotIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+    			if (NewSlotIndex != -1)
+    			{
+    				CachedBenchManager->RegisterUnitToSlot(NewSlotIndex, GrabbedUnit);
+    			}
+    		}
+    		else if (!bGoingToBench && CachedGridManager)
+    		{
+    			// [이게 꼭 불려야 공격을 함!] 그리드 장부에 등록
+    			CachedGridManager->RegisterUnitToGrid(GrabbedUnit);
+    		}
+   
+    		// 주소록 최신화
+    		UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
     	}
         else
         {
@@ -263,20 +288,43 @@ void ATopDownController::Tick(float DeltaTime)
 // 우클릭(이동 액션)을 뗐을 때 이펙트 재생
 void ATopDownController::OnMoveInputReleased()
 {
-    FHitResult Hit;
-    // WorldStatic 채널(바닥)을 감지하여 목적지 좌표를 얻음
-    if (GetHitResultUnderCursor(ECC_WorldStatic, true, Hit))
-    {
-       CachedDestination = Hit.Location;
-       // NavMesh 위에서 경로를 찾아 자동으로 이동시키는 언리얼 표준 함수
-       UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, CachedDestination);
+	UTFT_UISubsystem* UISubsystem = nullptr;
+	if (ULocalPlayer* LP = GetLocalPlayer())
+	{
+		UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>();
+	}
 
-       // 지정된 위치에 나이아가라(Niagara) 클릭 이펙트 소환
-       if (FXCursor)
-       {
-          UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, FXCursor, CachedDestination);
-       }
-    }
+	// 1. 먼저 유닛 클릭 여부 확인
+	FHitResult UnitHit;
+	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_Pawn));
+
+	if (GetHitResultUnderCursorForObjects(ObjectTypes, true, UnitHit))
+	{
+		if (AActor* HitActor = UnitHit.GetActor())
+		{
+			if (HitActor->IsA<ATFT_UnitCharacter>())
+			{
+				UISubsystem->BroadcastStatUIOpen(true, Cast<ATFT_UnitCharacter>(HitActor)->ChampionData, Cast<ATFT_UnitCharacter>(HitActor));
+				return;
+			}
+		}
+	}
+
+	// 아니면  UI 닫기
+	UISubsystem->BroadcastStatUIOpen(false, FStruct_TFT_Champion{}, nullptr);
+	
+	FHitResult GroundHit;
+	if (GetHitResultUnderCursor(ECC_WorldStatic, true, GroundHit))
+	{
+		CachedDestination = GroundHit.Location;
+		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, CachedDestination);
+
+		if (FXCursor)
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, FXCursor, CachedDestination);
+		}
+	}
 }
 
 // 게임 시작 시 레벨에 배치된 모든 기물의 위치를 TMap(주소록)에 등록
@@ -342,9 +390,9 @@ void ATopDownController::UpdateHighlightPosition(FVector MouseLoc)
     // [우선순위] 벤치 범위 안에 있으면 벤치로 판정, 아니면 그리드 판정
     if (DistToBench <= BenchThreshold && DistToBench < DistToGrid)
     {
-       FinalLocation = ClosestBenchLoc + FVector(0, 0, 20.0f); // 바닥 겹침 방지용 높이 보정
-       bIsDetected = true;
-       bGoingToBench = true;
+    	FinalLocation = ClosestBenchLoc + FVector(0.0f, 0.0f, HighlightZOffset); 
+    	bIsDetected = true;
+    	bGoingToBench = true;
     }
     else if (DistToGrid <= GridThreshold)
     {
@@ -352,7 +400,7 @@ void ATopDownController::UpdateHighlightPosition(FVector MouseLoc)
        bIsDetected = true;
        bGoingToBench = false;
     }
-
+	// 판정 결과에 따라 하이라이트 메쉬(사각형/육각형)를 실시간으로 교체
     if (bIsDetected)
     {
        // 판정 결과에 따라 하이라이트 메쉬(사각형/육각형)를 실시간으로 교체
@@ -372,8 +420,53 @@ void ATopDownController::UpdateHighlightPosition(FVector MouseLoc)
     }
 }
 
-// 특정 유닛이 현재 대기석(BenchUnits) 명단에 포함되어 있는지 확인
+void ATopDownController::SpawnUnitFromBP()
+{
+	// UnitClass(스폰할 BP)가 안 비어있는지, 대기석 매니저가 있는지 확인
+	if (!UnitClass || !CachedBenchManager) return;
+
+	// Get First Empty Slot Index
+	int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+
+	// Branch (Condition: Index > -1)
+	if (EmptyIndex > -1)
+	{
+		FVector BenchSlotLoc = CachedBenchManager->GetBenchSlotCenterByIndex(EmptyIndex);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn; 
+        
+		// 스폰할 때도 바뀐 이름(BenchSlotLoc)을 넣어줍니다.
+		ATFT_UnitCharacter* SpawnedUnit = GetWorld()->SpawnActor<ATFT_UnitCharacter>(UnitClass, BenchSlotLoc, FRotator::ZeroRotator, SpawnParams);
+
+		if (SpawnedUnit)
+		{
+			CachedBenchManager->RegisterUnitToSlot(EmptyIndex, SpawnedUnit);
+
+			AUnitManager* UnitManager = Cast<AUnitManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AUnitManager::StaticClass()));
+			if (UnitManager)
+			{
+				// 스폰된 유닛의 챔피언 키와 성급(기본 1성)으로 합체 체크
+				UnitManager->TryUpgradeUnit(SpawnedUnit->ChampionKey, 1);
+			}
+
+			// 컨트롤러 주소록에 등록
+			UnitHomeRegistry.Add(SpawnedUnit, SpawnedUnit->GetActorTransform());
+		}
+	}
+	else
+	{
+		// Branch False -> Print String
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("대기석이 꽉 찼습니다."));
+	}
+}
+
 bool ATopDownController::IsUnitOnBench(AActor* Unit) const
 {
-    return BenchUnits.Contains(Unit);
+	// 대기석 매니저한테 "얘 네 명단에 아직 있냐?" 라고 물어봄
+	if (CachedBenchManager && Unit)
+	{
+		return CachedBenchManager->BenchUnits.Contains(Unit);
+	}
+	return false;
 }

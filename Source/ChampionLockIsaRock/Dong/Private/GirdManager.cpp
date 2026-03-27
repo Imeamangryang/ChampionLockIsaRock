@@ -3,7 +3,9 @@
 
 #include "Dong/Public/GirdManager.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "SHIN/Character/TFT_UnitCharacter.h"
 
 // Sets default values
 AGirdManager::AGirdManager()
@@ -128,4 +130,41 @@ void AGirdManager::OnConstruction(const FTransform& Transform)
 			HexGridISM->AddInstance(NewTransform);
 		}
 	}
+}
+
+// 그리드 장부에 유닛 등록 (입장권 끊기)
+void AGirdManager::RegisterUnitToGrid(ATFT_UnitCharacter* Unit)
+{
+	if (Unit == nullptr) return;
+
+	// 이미 명단에 있으면 또 넣지 않게 체크 (중복 방지)
+	if (!DeployedUnits.Contains(Unit))
+	{
+		DeployedUnits.Add(Unit);
+		UE_LOG(LogTemp, Log, TEXT("%s 유닛이 그리드 명단에 등록되었습니다! 현재 필드 인원: %d"), 
+			*Unit->GetName(), DeployedUnits.Num());
+	}
+}
+
+// 그리드 장부에서 유닛 삭제 (퇴장 처리)
+void AGirdManager::ClearUnitFromGrid(ATFT_UnitCharacter* TargetUnit)
+{
+	if (!TargetUnit) return;
+    
+	// 명단에서 삭제
+	DeployedUnits.Remove(TargetUnit);
+	UE_LOG(LogTemp, Log, TEXT("그리드 데이터에서 %s 제거 완료"), *TargetUnit->GetName());
+}
+
+// 현재 필드에 있는 진짜 유닛들만 모아서 가져오기
+TArray<class ATFT_UnitCharacter*> AGirdManager::GetDeployedUnits()
+{
+	// null인 애들은 빼고 진짜 살아있는 유닛만 모아주기
+	TArray<ATFT_UnitCharacter*> ActiveUnits;
+	for (auto Unit : DeployedUnits)
+	{
+		// 죽거나 사라진 유닛은 제외
+		if (IsValid(Unit)) ActiveUnits.Add(Unit);
+	}
+	return ActiveUnits;
 }
