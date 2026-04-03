@@ -6,8 +6,7 @@
 #include "GameFramework/PlayerState.h"
 #include "TFTPlayerState.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGoldChangedSignature, int32, NewGold);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnLevelInfoChangedSignature, int32, NewLevel, int32, NewCurrentXP, int32, NewMaxXP);
+class UTFT_UISubsystem;
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATFTPlayerState : public APlayerState
@@ -19,7 +18,7 @@ public:
 	
 	// --- 경제 및 레벨 데이터 ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Economy")
-	int32 Gold;
+	int32 PlayerGold;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Level")
 	int32 PlayerLevel;
@@ -30,13 +29,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Level")
 	int32 MaxXP;
 	
-	// --- 이벤트 알림  ---
-	UPROPERTY(BlueprintAssignable, Category = "TFT|Events")
-	FOnGoldChangedSignature OnGoldChanged;
-
-	UPROPERTY(BlueprintAssignable, Category = "TFT|Events")
-	FOnLevelInfoChangedSignature OnLevelInfoChanged;
-
 	// --- 외부 호출용 함수 ---
 	UFUNCTION(BlueprintCallable, Category = "TFT|Logic")
 	void AddGold(int32 Amount);
@@ -55,7 +47,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "TFT|Logic")
 	void AddStageEndXP();
 	
-private:
 	// 다음 레벨에 필요한 경험치 통을 계산하는 내부 함수
 	void UpdateMaxXP();
+	
+private:
+	UTFT_UISubsystem* GetUISubsystem() const;
 };

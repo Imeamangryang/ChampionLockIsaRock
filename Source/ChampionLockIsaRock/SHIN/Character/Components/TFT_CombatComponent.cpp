@@ -87,6 +87,7 @@ void UTFT_CombatComponent::EndCombat()
 {
 	// 춤 애니메이션 몽타주 재생 
 	OwnerCharacter->PlayDanceMontage();
+	OwnerCharacter->HPBarWidgetVisible(true);
 }
 
 void UTFT_CombatComponent::BeginPlay()
@@ -432,6 +433,8 @@ void UTFT_CombatComponent::HandleReturnAllUnitsHome()
 {
 	StopAllActions();
 	
+
+	
 	// 전투 종료 시 Idle 상태로 복귀 및 타겟 초기화
 	CurrentTarget = nullptr;
 	ChangeState(GetIdleState(), ECombatState::Idle);
@@ -444,6 +447,7 @@ void UTFT_CombatComponent::Dead()
 {
 	if (OwnerCharacter)
 	{
+		OwnerCharacter->HPBarWidgetVisible(false);
 		OwnerCharacter->PlayDeathMontage();
 		
 		// 사망 모션이 끝나면

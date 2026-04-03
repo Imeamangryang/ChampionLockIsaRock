@@ -29,6 +29,8 @@ void ATopDownController::BeginPlay()
 {
     Super::BeginPlay();
 	
+	BroadcastUnitCount();
+	
 	// 1. 월드에서 BoardCamera 태그를 가진 액터를 찾습니다.
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("BoardCamera"), FoundActors);
@@ -120,11 +122,17 @@ void ATopDownController::OnGrabPressed(const FInputActionValue& Value)
 
        if (TargetUnit)
        {
+			// 적 기물인지 검사 적이면 집기 취소
+			if (TargetUnit->bIsEnemy)
+       		{
+       			UE_LOG(LogTemp, Warning, TEXT("적 기물은 조작할 수 없습니다"));
+       			return; 
+			}
        		//현재 전투 중인지 확인합니다.
 			ATFTStageManager* StageManager = Cast<ATFTStageManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ATFTStageManager::StaticClass()));
-       		bool bIsBoardLocked = StageManager && StageManager->bIsCombatActive;
+       		bool bIsBoardLocked = StageManager && StageManager->IsBoardLocked();
 
-       		// 전투 중인데 대기석에 있는 기물이 아니라면(즉, 필드에서 싸우는 기물이라면) 집기 취소!
+       		// 전투 중인데 대기석에 있는 기물이 아니라면(즉, 필드에서 싸우는 기물이라면) 집기 취소
        		if (bIsBoardLocked && !IsUnitOnBench(TargetUnit))
        		{
        			return; 
@@ -181,6 +189,8 @@ void ATopDownController::PerformDrop()
             
     		bIsHoldingUnit = false;
     		GrabbedUnit = nullptr;
+    		
+    		BroadcastUnitCount();
             
     		// 팔았으니까 아래의 타일 배치 로직은 실행하지 않고 여기서 함수 끝
     		return; 
@@ -222,9 +232,6 @@ void ATopDownController::PerformDrop()
 	        	bIsValidDrop = true;	
 	        }
         }
-
-    	if (bIsValidDrop) 
-    	{
     		// 1. 함수 대신 수학적 거리로 벤치에서 왔는지 판별합니다.
     		bool bIsComingFromBench = false;
     		if (CachedBenchManager && CachedGridManager)
@@ -235,7 +242,8 @@ void ATopDownController::PerformDrop()
     			// 원래 위치가 그리드보다 벤치에 더 가까웠다면, 벤치에서 온 기물로 판정!
     			bIsComingFromBench = (DistFromBench < DistFromGrid); 
     		}
-       
+       if (bIsValidDrop)
+       {
     		// 2. 벤치에서 필드로 향하는 경우에만 인원수 체크!
     		if (!bGoingToBench && bIsComingFromBench)
     		{
@@ -280,9 +288,17 @@ void ATopDownController::PerformDrop()
     			GrabbedUnit->SetActorLocation(FVector(OtherUnitLoc.X, OtherUnitLoc.Y, OriginalLocation.Z));
     			OtherUnit->SetActorLocation(OriginalLocation);
 
-    			// 상대방이 원래 내가 있던 자리(OriginalLocation)로 갔으니, 그 위치에 맞게 다시 등록
-    			// (이 부분은 'OriginalLocation'이 벤치였는지 그리드였는지 판별하는 로직이 필요하지만, 
-    			// 일단은 GrabbedUnit의 등록 로직을 따라가면 해결.)
+    			if (bIsComingFromBench)
+    			{
+    				// 내가 벤치에서 왔다면, 상대방은 이제 벤치로 간 것임
+    				int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+    				if (EmptyIndex != -1) CachedBenchManager->RegisterUnitToSlot(EmptyIndex, OtherUnit);
+    			}
+    			else
+    			{
+    				// 내가 그리드에서 왔다면, 상대방은 이제 그리드로 간 것임
+    				CachedGridManager->RegisterUnitToGrid(OtherUnit);
+    			}
       
     			// 스왑된 두 기물의 주소록 최신화
     			UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
@@ -318,7 +334,7 @@ void ATopDownController::PerformDrop()
             GrabbedUnit->SetActorLocation(OriginalLocation);
         }
     }
-
+	BroadcastUnitCount();
     // 상태 초기화 및 시각적 요소(가이드라인, 하이라이트) 숨김
     if (HighlightActor) HighlightActor->SetActorHiddenInGame(true);
     if (CachedGridManager) CachedGridManager->ToggleGridVisibility(false);
@@ -459,7 +475,7 @@ void ATopDownController::UpdateHighlightPosition(FVector MouseLoc)
     float BenchThreshold = CachedBenchManager->TileSize * 2.0f; 
 
 	ATFTStageManager* StageManager = Cast<ATFTStageManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ATFTStageManager::StaticClass()));
-	bool bIsBoardLocked = StageManager && StageManager->bIsCombatActive;
+	bool bIsBoardLocked = StageManager && StageManager->IsBoardLocked();
 	
     FVector FinalLocation = FVector::ZeroVector;
     bool bIsDetected = false;
@@ -560,7 +576,7 @@ bool ATopDownController::IsUnitOnBench(AActor* Unit) const
 	}
 	return false;
 }
-
+ 
 void ATopDownController::ExecuteSellUnit(ATFT_UnitCharacter* UnitToSell)
 {
 	if (!UnitToSell) return;
@@ -571,7 +587,7 @@ void ATopDownController::ExecuteSellUnit(ATFT_UnitCharacter* UnitToSell)
 		// UnitToSell->Cost 가 없다면 임시로 1골드로 설정
 		int32 Price = 1; 
 		PS->AddGold(Price);
-		UE_LOG(LogTemp, Warning, TEXT("기물 판매 완료! +%d 골드. 현재 잔액: %d"), Price, PS->Gold);
+		UE_LOG(LogTemp, Warning, TEXT("기물 판매 완료! +%d 골드. 현재 잔액: %d"), Price, PS->PlayerGold);
 	}
 
 	// 2. 장부에서 지우기 (어디 있던 기물이든 일단 지움)
@@ -594,4 +610,26 @@ void ATopDownController::ExecuteSellUnit(ATFT_UnitCharacter* UnitToSell)
 
 	// 5. 기물 완전 파괴
 	UnitToSell->Destroy();
+	BroadcastUnitCount();
+}
+
+void ATopDownController::BroadcastUnitCount()
+{
+	int32 Current = 0;
+	int32 Max = 0;
+
+	// 1. 필드에 있는 현재 기물 수 가져오기
+	if (CachedGridManager) 
+	{
+		Current = CachedGridManager->GetUnitCountOnGrid();
+	}
+
+	// 2. 내 레벨(최대 배치 가능 수) 가져오기
+	if (ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>()) 
+	{
+		Max = PS->PlayerLevel;
+	}
+
+	// 3. UI 쪽으로 숫자 2개를 담아서 방송 송출
+	OnUnitCountChanged.Broadcast(Current, Max);
 }

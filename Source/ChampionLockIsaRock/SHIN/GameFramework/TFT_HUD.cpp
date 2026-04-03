@@ -14,6 +14,18 @@ ATFT_HUD::ATFT_HUD()
 	{
 		ShopClass = ShopUIBPClass.Class;
 	}
+	
+	static ConstructorHelpers::FClassFinder<UUserWidget> ItemInventoryBPClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_ItemInventoryPanel.WBP_ItemInventoryPanel_C"));
+	if (ItemInventoryBPClass.Succeeded())
+	{
+		InventoryClass = ItemInventoryBPClass.Class;
+	}
+	
+	static ConstructorHelpers::FClassFinder<UUserWidget> StageTimerBPClass(TEXT("/Game/Dong/UI/WBP/WBP_TimeManager.WBP_TimeManager_C"));
+	if (StageTimerBPClass.Succeeded())
+	{
+		StageTimerClass = StageTimerBPClass.Class;
+	}
 }
 
 void ATFT_HUD::BeginPlay()
@@ -27,4 +39,10 @@ void ATFT_HUD::BeginPlay()
 	
 	ShopUIInstance = CreateWidget<UUserWidget>(PC, ShopClass);
 	ShopUIInstance->AddToViewport();
+	
+	InventoryUIInstance = CreateWidget<UUserWidget>(PC, InventoryClass);
+	InventoryUIInstance->AddToViewport();
+	
+	StageTimerUIInstance = CreateWidget<UUserWidget>(PC, StageTimerClass);
+	StageTimerUIInstance->AddToViewport();
 }

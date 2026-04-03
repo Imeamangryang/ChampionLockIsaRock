@@ -308,6 +308,14 @@ void ATFT_UnitCharacter::UpdateMPBarWidget()
 	}
 }
 
+void ATFT_UnitCharacter::HPBarWidgetVisible(bool bIsVisible)
+{
+	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	{
+		HPWidget->SetVisibility(bIsVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+}
+
 FString ATFT_UnitCharacter::GetChampionNameString()
 {
 	const UEnum* EnumPtr = StaticEnum<ETFT_ChampionKey>();

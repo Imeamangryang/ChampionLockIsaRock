@@ -15,12 +15,14 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// Stat UI
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI")
 	TSubclassOf<UUserWidget> StatUIClass;
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> StatUIInstance;
 	
+	// Shop UI
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI")
 	TSubclassOf<UUserWidget> ShopClass;
 	
@@ -28,4 +30,17 @@ protected:
 	TObjectPtr<UUserWidget> ShopUIInstance;
 	
 	
+	// Inventory UI
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI")
+	TSubclassOf<UUserWidget> InventoryClass;
+	
+	UPROPERTY()
+	TObjectPtr<UUserWidget> InventoryUIInstance;
+	
+	// StageTimer UI
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI")
+	TSubclassOf<UUserWidget> StageTimerClass;
+	
+	UPROPERTY()
+	TObjectPtr<UUserWidget> StageTimerUIInstance;
 };

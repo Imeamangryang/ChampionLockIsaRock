@@ -31,6 +31,7 @@ public:
 	
 	void UpdateHPBarWidget();
 	void UpdateMPBarWidget();
+	void HPBarWidgetVisible(bool bIsVisible);
 	
 	// data 초기화
 	void Initialize(const FTFT_ChampionData& Data, int32 StarLevel);

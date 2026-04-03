@@ -2,47 +2,80 @@
 
 
 #include "Dong/Public/TFTPlayerState.h"
+#include "Dong/Public/TopDownController.h"
+#include "SHIN/Subsystem/TFT_UISubsystem.h"
 
 ATFTPlayerState::ATFTPlayerState()
 {
 	// 초기값 설정 (TFT 시험 모드 기준)
-	Gold = 10;
+	PlayerGold = 100;
 	PlayerLevel = 1;
 	CurrentXP = 0;
 	UpdateMaxXP(); // 레벨 1의 MaxXP 설정
 }
 
+// 헬퍼 함수 구현
+UTFT_UISubsystem* ATFTPlayerState::GetUISubsystem() const
+{
+	if (APlayerController* PC = GetPlayerController())
+	{
+		if (ULocalPlayer* LP = PC->GetLocalPlayer())
+		{
+			return LP->GetSubsystem<UTFT_UISubsystem>();
+		}
+	}
+	return nullptr;
+}
+
 void ATFTPlayerState::AddGold(int32 Amount)
 {
-	Gold += Amount;
-	OnGoldChanged.Broadcast(Gold); // UI 업데이트 신호 전송
+	PlayerGold += Amount;
+	if (auto* UISub = GetUISubsystem())
+	{
+		UISub->BroadcastGoldUpdate(PlayerGold); // 함수 이름 확인: BroadcastGoldUpdate
+	}
 }
 
 bool ATFTPlayerState::SpendGold(int32 Amount)
 {
-	if (Gold >= Amount)
+	if (PlayerGold >= Amount)
 	{
-		Gold -= Amount;
-		OnGoldChanged.Broadcast(Gold);
+		PlayerGold -= Amount;
+		if (auto* UISub = GetUISubsystem())
+		{
+			UISub->BroadcastGoldUpdate(PlayerGold); // 돈을 쓸 때도 UI에 알려줘야 함!
+		}
 		return true;
 	}
-	return false; // 돈이 부족함
+	return false;
 }
 
 void ATFTPlayerState::AddXP(int32 Amount)
 {
+	// 레벨업 전의 레벨 미리 저장
+	int32 OldLevel = PlayerLevel;
 	CurrentXP += Amount;
 
-	// 레벨업 체크 (반복문을 써서 한 번에 여러 레벨이 오를 경우도 대비)
+	// 레벨업 체크
 	while (CurrentXP >= MaxXP && PlayerLevel < 10) // 최대 레벨 10 가정
 	{
 		CurrentXP -= MaxXP;
 		PlayerLevel++;
 		UpdateMaxXP(); // 레벨에 맞는 새로운 MaxXP 갱신
 	}
-
-	// 변경된 레벨/경험치 정보를 UI에 알림
-	OnLevelInfoChanged.Broadcast(PlayerLevel, CurrentXP, MaxXP);
+	// 레벨이 올랐는지 확인
+	if (OldLevel != PlayerLevel)
+	{
+		if (auto* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController()))
+		{
+			PC->BroadcastUnitCount();
+		}
+	}
+	// 경험치/레벨 UI 업데이트 호출
+	if (auto* UISub = GetUISubsystem())
+	{
+		UISub->BroadcastLevelInfoUpdate(PlayerLevel, CurrentXP, MaxXP);
+	}
 }
 
 void ATFTPlayerState::UpdateMaxXP()
@@ -82,3 +115,4 @@ void ATFTPlayerState::AddStageEndXP()
 	// 스테이지가 넘어갈 때마다 경험치 2 추가
 	AddXP(2);
 }
+

@@ -3,6 +3,7 @@
 
 #include "Dong/Public/TFTStageManager.h"
 #include "Dong/Public/TopDownController.h"
+#include "Dong/Public/TFTPlayerState.h"
 #include "SHIN/Character/TFT_UnitCharacter.h"
 #include "SHIN/Character/Components/TFT_CombatComponent.h"
 #include "SHIN/Character/Components/TFT_StatComponent.h"
@@ -65,8 +66,13 @@ void ATFTStageManager::StartRound()
 	{
 		ActivePlayerUnits = PC->CachedGridManager->GetDeployedUnits();
 	}
-	
+	 
 	bIsCombatActive = true;
+	if (PC)
+	{
+		PC->BroadcastUnitCount();
+	}
+	
 	GetWorldTimerManager().SetTimer(OvertimeTimerHandle, this, &ATFTStageManager::StartOvertime, 30.0f, false);
     
 	UE_LOG(LogTemp, Warning, TEXT("전투 시작! 30초 후 연장전 돌입."));
@@ -252,6 +258,8 @@ void ATFTStageManager::ResetUnits()
 // 3초 뒤에 실행될 진짜 정산 로직
 void ATFTStageManager::ProceedToNextRound()
 {
+	GetWorldTimerManager().ClearTimer(StageTransitionTimerHandle);
+	
 	// 다음 스테이지로 넘어가기전에, 방금 끝난 스테이지에 승패 여부를 찍음
 	if (StageHistory.IsValidIndex(CurrentStageIndex))
 	{
@@ -267,11 +275,28 @@ void ATFTStageManager::ProceedToNextRound()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("정산: 패배... 현재 스테이지 다시 도전."));
 	}
-
 	// 아군 부활 및 적군 스폰
 	ResetUnits();
 	SetupStage(CurrentStageIndex);
 	
+	// 다음 스테이지 세팅이 완료된 직후 경험치를 줍니다.
+	if (bLastRoundVictory) 
+	{
+		// 컨트롤러를 한 번만 가져와서 캐스팅합니다.
+		if (ATopDownController* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController()))
+		{
+			// PlayerState를 가져와서 보상 지급
+			if (ATFTPlayerState* PS = PC->GetPlayerState<ATFTPlayerState>())
+			{
+				//경험치 보상 2
+				PS->AddStageEndXP(); // 여기서 레벨업이 일어나면 BroadcastUnitCount도 호출됨
+				// 골드 보상 5
+				PS->AddGold(5); 
+			}
+				PC->BroadcastUnitCount();
+		}
+	}
+	// UI들에게 준비 시작이라고 알림
 	OnPreparationStarted.Broadcast();
 }
 

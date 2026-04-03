@@ -21,3 +21,13 @@ void UTFT_UISubsystem::BroadcastItemInventoryUpdated(const TArray<FStruct_TFTIte
 {
 	OnItemInventoryUpdated.Broadcast(InventoryItems);
 }
+
+void UTFT_UISubsystem::BroadcastGoldUpdate(int32 NewGold)
+{
+	OnGoldChanged.Broadcast(NewGold);
+}
+
+void UTFT_UISubsystem::BroadcastLevelInfoUpdate(int32 NewLevel, int32 NewCurrentXP, int32 NewMaxXP)
+{
+	OnLevelInfoUpdated.Broadcast(NewLevel, NewCurrentXP, NewMaxXP);
+}

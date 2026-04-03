@@ -16,6 +16,7 @@ class AGirdManager;
 class ABenchManager;
 
 DECLARE_MULTICAST_DELEGATE(FOnReturnAllUnitsHome);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUnitCountChangedSignature, int32, CurrentUnits, int32, MaxUnits);
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATopDownController : public APlayerController
@@ -154,6 +155,13 @@ public:
     
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Level")
     int32 CheckMyGold;
+    
+    UPROPERTY(BlueprintAssignable, Category = "TFT|Events")
+    FOnUnitCountChangedSignature OnUnitCountChanged;
+
+    // 유닛 카운트
+    UFUNCTION(BlueprintCallable, Category = "TFT|Logic")
+    void BroadcastUnitCount();
     
     // 기물 판매
     void ExecuteSellUnit(class ATFT_UnitCharacter* UnitToSell);
