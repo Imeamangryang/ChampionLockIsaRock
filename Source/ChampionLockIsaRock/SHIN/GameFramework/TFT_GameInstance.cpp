@@ -12,12 +12,12 @@ void UTFT_GameInstance::Init()
 		UE_LOG(LogTemp, Error, TEXT("ChampionDataTable Path is NULL"));
 		return;
 	}
-
-	UDataTable* LoadedTable = ChampionDataTable.LoadSynchronous();
-
-	if (!LoadedTable)
+	
+	ItemDataTable = TSoftObjectPtr<UDataTable>(FSoftObjectPath(TEXT("/Game/SHIN/Data/DataTable/DT_ItemTable.DT_ItemTable")));
+	
+	if (ItemDataTable.IsNull())
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load Champion DataTable"));
+		UE_LOG(LogTemp, Error, TEXT("ItemDataTable Path is NULL"));
 		return;
 	}
 }

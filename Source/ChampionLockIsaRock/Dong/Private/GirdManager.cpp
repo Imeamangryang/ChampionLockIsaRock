@@ -23,7 +23,7 @@ void AGirdManager::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// 이 액터에 붙어있는 모든 ISM 중에서 '진짜 메쉬가 들어있는 놈'을 찾습니다.
+	// 이 액터에 붙어있는 모든 ISM 중에서 메쉬가 들어있는 놈을 찾습니다.
 	TArray<UInstancedStaticMeshComponent*> ISMComponents;
 	GetComponents<UInstancedStaticMeshComponent>(ISMComponents);
 
@@ -32,8 +32,8 @@ void AGirdManager::BeginPlay()
 		// 메쉬가 할당되어 있고 인스턴스가 0개보다 많은 녀석이 '진짜'입니다.
 		if (TargetISM && (TargetISM->GetStaticMesh() != nullptr || TargetISM->GetInstanceCount() > 0))
 		{
-			HexGridISM = TargetISM; // C++ 변수를 실제 작동하는 컴포넌트로 연결
-			UE_LOG(LogTemp, Warning, TEXT("진짜 그리드 ISM을 찾아서 연결했습니다: %s"), *TargetISM->GetName());
+			HexGridISM = TargetISM; // 변수를 실제 작동하는 컴포넌트로 연결
+			UE_LOG(LogTemp, Warning, TEXT("그리드 ISM을 찾아서 연결했습니다: %s"), *TargetISM->GetName());
 			break;
 		}
 	}
@@ -132,7 +132,7 @@ void AGirdManager::OnConstruction(const FTransform& Transform)
 	}
 }
 
-// 그리드 장부에 유닛 등록 (입장권 끊기)
+// 그리드 장부에 유닛 등록
 void AGirdManager::RegisterUnitToGrid(ATFT_UnitCharacter* Unit)
 {
 	if (Unit == nullptr) return;
@@ -167,4 +167,20 @@ TArray<class ATFT_UnitCharacter*> AGirdManager::GetDeployedUnits()
 		if (IsValid(Unit)) ActiveUnits.Add(Unit);
 	}
 	return ActiveUnits;
+}
+
+int32 AGirdManager::GetUnitCountOnGrid() const
+{
+	int32 Count = 0;
+    
+	// DeployedUnits 배열을 순회하면서 진짜로 존재하는 유닛만 개수를 셉니다.
+	for (ATFT_UnitCharacter* Unit : DeployedUnits)
+	{
+		if (IsValid(Unit)) // 죽었거나 삭제된(nullptr) 유닛은 세지 않음
+		{
+			Count++;
+		}
+	}
+    
+	return Count;
 }

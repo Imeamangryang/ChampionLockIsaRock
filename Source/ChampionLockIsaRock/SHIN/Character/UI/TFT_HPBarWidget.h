@@ -6,7 +6,10 @@
 
 class UProgressBar;
 class UCanvasPanel;
+class UHorizontalBox;
+class UImage;
 class ATFT_UnitCharacter;
+
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API UTFT_HPBarWidget : public UUserWidget
@@ -15,12 +18,16 @@ class CHAMPIONLOCKISAROCK_API UTFT_HPBarWidget : public UUserWidget
 	
 public:
 	void SetOwnerCharacter(ATFT_UnitCharacter* InOwnerCharacter);
-	void UpdateHPBar();
-	void UpdateMPBar();
-	void RefreshDividers();
+	void UpdateHPBar() const;
+	void UpdateMPBar() const;
+	void RefreshDividers() const;
+	
+	void RefreshItemSlots();
 	
 	UFUNCTION(BlueprintImplementableEvent, Category="TFT|UI")
 	void BP_UpdateStarFrame(int32 InStarLevel);
+	
+	void ApplyBarVerticalOffset(float OffsetY) const;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -33,6 +40,18 @@ protected:
 	
 	UPROPERTY(meta = (BindWidget))
 	UCanvasPanel* DividerCanvas;
+	
+	UPROPERTY(meta = (BindWidgetOptional), BlueprintReadWrite)
+	UImage* HPBarImage;
+
+	UPROPERTY(meta = (BindWidgetOptional), BlueprintReadWrite)
+	UImage* HPBarImage_1;
+
+	UPROPERTY(meta = (BindWidgetOptional), BlueprintReadWrite)
+	UImage* HPBarImage_2;
+	
+	UPROPERTY(meta = (BindWidgetOptional))
+	UHorizontalBox* ItemSlotBox;
 
 	UPROPERTY()
 	ATFT_UnitCharacter* OwnerCharacter;
@@ -40,4 +59,7 @@ protected:
 public: 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HP Bar")
 	int32 HPPerDivider = 150;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item Slot")
+	float EquippedItemOffsetY = -40.f;
 };

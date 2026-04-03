@@ -14,4 +14,7 @@ public:
 	
 	UPROPERTY(EditDefaultsOnly)
 	TSoftObjectPtr<UDataTable> ChampionDataTable;
+	
+	UPROPERTY(EditDefaultsOnly)
+	TSoftObjectPtr<UDataTable> ItemDataTable;
 };

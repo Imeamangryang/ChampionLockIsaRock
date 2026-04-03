@@ -15,6 +15,8 @@ class ATFT_UnitCharacter;
 class AGirdManager;
 class ABenchManager;
 
+DECLARE_MULTICAST_DELEGATE(FOnReturnAllUnitsHome);
+
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATopDownController : public APlayerController
 {
@@ -22,7 +24,7 @@ class CHAMPIONLOCKISAROCK_API ATopDownController : public APlayerController
     
 public:
     ATopDownController();
-
+    FOnReturnAllUnitsHome OnReturnAllUnitsHome;
 protected:
     virtual void BeginPlay() override;
     virtual void SetupInputComponent() override;
@@ -89,15 +91,10 @@ public:
     // 맵에 배치된 대기석 매니저
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT_Managers")
     ABenchManager* CachedBenchManager;
-
-// =========================================================================
-// 4. 데이터 및 상태 추적 (명단 관리)
-// =========================================================================
-protected:
     // 맵에 배치된 모든 기물의 초기 위치 (전투 종료 후 복귀용)
     UPROPERTY()
     TMap<ATFT_UnitCharacter*, FTransform> UnitHomeRegistry;
-
+protected:
     FVector CachedDestination; // 전설이 우클릭 이동 목적지
 
 // =========================================================================
@@ -138,18 +135,32 @@ public:
     
     // 커스텀 이벤트 역할을 할 함수
     UFUNCTION(BlueprintCallable, Category = "TFT|Spawn")
-    void SpawnUnitFromBP();
+    void SpawnUnitFromBP(ETFT_ChampionKey Key);
     
-    // [추가] 대기석 하이라이트 크기 조절
+    // 대기석 하이라이트 크기 조절
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
     FVector BenchHighlightScale = FVector(1.0f, 1.0f, 1.0f);
+    
+    // 대기석 하이라이트 위치 미세 조정용
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
+    FVector BenchHighlightOffset = FVector(0.0f, 0.0f, 0.0f);
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
+    FRotator GridHighlightRotation = FRotator(0.0f, 0.0f, 30.0f); 
 
-    // [추가] 붕 뜨는 느낌을 없애기 위한 Z축 높이 조절 (기존 20.0f에서 5.0f로 기본값 낮춤)
+    // 붕 뜨는 느낌을 없애기 위한 Z축 높이 조절 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT_UI")
     float HighlightZOffset = 5.0f;
+    
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Level")
+    int32 CheckMyGold;
+    
+    // 기물 판매
+    void ExecuteSellUnit(class ATFT_UnitCharacter* UnitToSell);
 protected:
     // 블루프린트의 'SpawnActor' 노드에 있는 'Class' 핀 역할
     // 에디터에서 BP_Unit을 여기에 넣어주면 됨
     UPROPERTY(EditAnywhere, Category = "TFT|Spawn")
     TSubclassOf<class ATFT_UnitCharacter> UnitClass;
+    
 };

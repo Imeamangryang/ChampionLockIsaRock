@@ -60,7 +60,7 @@ FVector ABenchManager::GetSnappedBenchLocation(FVector WorldLocation)
 			// 1. 타일의 처음 위치(0,0,0)를 가져옵니다.
 			FVector PureInstanceLoc = InstanceTransform.GetLocation();
             
-			// 2. 마우스와 '순수 타일 위치' 사이의 거리를 잽니다. (이래야 정확한 칸이 잡힙니다)
+			// 2. 마우스와 '순수 타일 위치' 사이의 거리를 잽니다. (이래야 정확한 칸이 잡힘)
 			float DistSq = FVector::DistSquared(WorldLocation, PureInstanceLoc);
 
 			if (DistSq < MinDistanceSq)
@@ -146,7 +146,7 @@ FVector ABenchManager::GetSlotWorldLocation(int32 Index)
 	return GetBenchSlotCenterByIndex(Index);
 }
 
-// 2. 인덱스 번호로 타일 중앙 좌표 가져오기
+// 4. 인덱스 번호로 타일 중앙 좌표 가져오기
 FVector ABenchManager::GetBenchSlotCenterByIndex(int32 Index)
 {
 	if (!BenchISM || !BenchUnits.IsValidIndex(Index)) return GetActorLocation();
@@ -160,7 +160,7 @@ FVector ABenchManager::GetBenchSlotCenterByIndex(int32 Index)
 	return GetActorLocation();
 }
 
-// 3. 대기석 유닛 삭제
+// 5. 대기석 유닛 데이터 삭제
 void ABenchManager::ClearUnitFromBench(AActor* TargetUnit)
 {
 	if (!TargetUnit) return; // 애초에 지울 대상이 없으면 리턴

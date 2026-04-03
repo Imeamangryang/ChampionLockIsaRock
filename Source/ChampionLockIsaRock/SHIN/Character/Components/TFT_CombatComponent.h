@@ -31,6 +31,9 @@ public:
 	
 	UFUNCTION(BlueprintCallable)
 	void EndCombat();
+	
+	UFUNCTION()
+	void OnAttackHitNotify();
 
 protected:
 	virtual void BeginPlay() override;
@@ -65,11 +68,15 @@ public:
 	void AttackTarget();
 	void CastSkill();
 	bool IsManaFull() const;
+	void Dead();
     
 	// 추가로 필요한 헬퍼 함수들
 	bool IsCasting() const;
 	void ResetAttackTimer();
 	void StopAllActions();
+	
+	UFUNCTION()
+	void HandleReturnAllUnitsHome();
 	
 	// 상태 전환 함수 (Enum 값도 같이 업데이트 하도록 파라미터 추가)
 	void ChangeState(ICombatState* NewState, ECombatState NewEnumState);

@@ -4,6 +4,8 @@
 #include "TFT_StatComponent.h"
 #include "GameFramework/Controller.h"
 #include "Components/CapsuleComponent.h"
+#include "../../Dong/Public/TopDownController.h"
+#include "Kismet/GameplayStatics.h"
 
 UTFT_CombatComponent::UTFT_CombatComponent()
 {
@@ -51,7 +53,7 @@ void UTFT_CombatComponent::StartCombat()
 		bRotateToCombatStart = true;
 	}
 	
-	AttackRange = OwnerCharacter->StatComponent->AttackRange * 180.f;
+	AttackRange = OwnerCharacter->StatComponent->AttackRange * 180.f + 100;
 	AttackRate = OwnerCharacter->StatComponent->AttackSpeed;
 
 	// Idle -> Searching으로 상태 변경 (FSM 가동 시작)
@@ -83,12 +85,8 @@ void UTFT_CombatComponent::StartCombat()
 
 void UTFT_CombatComponent::EndCombat()
 {
-	// 전투 종료 시 Idle 상태로 복귀 및 타겟 초기화
-	CurrentTarget = nullptr;
-	ChangeState(GetIdleState(), ECombatState::Idle);
-	
-	OwnerCharacter->GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
-	OwnerCharacter->GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
+	// 춤 애니메이션 몽타주 재생 
+	OwnerCharacter->PlayDanceMontage();
 }
 
 void UTFT_CombatComponent::BeginPlay()
@@ -108,6 +106,16 @@ void UTFT_CombatComponent::BeginPlay()
 	CurrentTarget = nullptr;
 	CurrentState = ECombatState::Idle;
 	CurrentStatePtr = &IdleState;
+	
+	// 델리게이트 바인딩
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		ATopDownController* TopDownController = Cast<ATopDownController>(PC);
+		if (TopDownController)
+		{
+			TopDownController->OnReturnAllUnitsHome.AddUObject(this, &UTFT_CombatComponent::HandleReturnAllUnitsHome);
+		}
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("CombatComponent initialized for %s | Range: %.1f | Interval: %.2f"),
 	*OwnerCharacter->GetChampionNameString(),
@@ -340,19 +348,48 @@ void UTFT_CombatComponent::AttackTarget()
 	// TODO: 여기에 실제 공격 처리 추가
 	// 1. 공격 애니메이션 재생 
 	OwnerCharacter->PlayAttackMontageByInterval(AttackRate);
+}
+
+void UTFT_CombatComponent::OnAttackHitNotify()
+{
+	if (OwnerCharacter == nullptr || CurrentTarget == nullptr)
+	{
+		return;
+	}
 	
-	// 2. 대상 HP 감소
-	const float Damage = OwnerCharacter->StatComponent->AttackDamage;
+	const float Distance = FVector::Dist(
+		OwnerCharacter->GetActorLocation(),
+		CurrentTarget->GetActorLocation()
+	);
+
+	if (Distance > AttackRange)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("%s hit notify fired, but target is out of range."),
+			*OwnerCharacter->GetChampionNameString());
+		return;
+	}
+
+	const float Damage = OwnerCharacter->StatComponent
+		? OwnerCharacter->StatComponent->AttackDamage
+		: 0.f;
+
+	if (Damage <= 0.f)
+	{
+		return;
+	}
+
 	CurrentTarget->StatComponent->ApplyDamage(Damage);
-	
+
+	if (OwnerCharacter->StatComponent)
+	{
+		OwnerCharacter->StatComponent->AddMana(10.f);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("%s dealt %.1f damage to %s (Target HP: %d)"),
 		*OwnerCharacter->GetChampionNameString(),
 		Damage,
 		*CurrentTarget->GetChampionNameString(),
 		CurrentTarget->StatComponent->Health);
-	
-	// 3. 마나 획득
-	OwnerCharacter->StatComponent->AddMana(10.f);
 }
 
 void UTFT_CombatComponent::CastSkill()
@@ -387,9 +424,33 @@ void UTFT_CombatComponent::StopAllActions()
 {
 	if (OwnerCharacter)
 	{
-		// 사망 애니메이션 재생
-		OwnerCharacter->Destroy();
-		// 액터 삭제
+		OwnerCharacter->StopMontage(0.15);
+	}
+}
+
+void UTFT_CombatComponent::HandleReturnAllUnitsHome()
+{
+	StopAllActions();
+	
+	// 전투 종료 시 Idle 상태로 복귀 및 타겟 초기화
+	CurrentTarget = nullptr;
+	ChangeState(GetIdleState(), ECombatState::Idle);
+	
+	OwnerCharacter->GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	OwnerCharacter->GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
+}
+
+void UTFT_CombatComponent::Dead()
+{
+	if (OwnerCharacter)
+	{
+		OwnerCharacter->PlayDeathMontage();
+		
+		// 사망 모션이 끝나면
+		// 사망 애니메이션이 끝난 뒤 액터 숨기기
+		// 오버랩도 끄기
+		// OwnerCharacter->SetActorHiddenInGame(true);
+		// OwnerCharacter->SetActorEnableCollision(false);
 	}
 }
 

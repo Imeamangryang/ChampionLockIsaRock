@@ -119,6 +119,6 @@ void FCastingSkillState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
 
 void FDeadState::Enter(UTFT_CombatComponent* Combat)
 {
-    Combat->StopAllActions();
+    Combat->Dead();
     // 사망 처리 로직 (콜리전 끄기 등)
 }

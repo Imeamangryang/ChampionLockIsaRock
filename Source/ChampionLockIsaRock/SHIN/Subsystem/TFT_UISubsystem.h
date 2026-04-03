@@ -1,12 +1,15 @@
 ﻿#pragma once
 #include "CoreMinimal.h"
 #include "SHIN/Struct/FStruct_TFT_Champion.h"
+#include "SHIN/Struct/TFT_ItemTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "TFT_UISubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnStatUIOpen, bool, bIsOpen, FStruct_TFT_Champion, ChampionData, ATFT_UnitCharacter*, Unit);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHPUpdated, ATFT_UnitCharacter*, Unit, float, MaxHP, float, CurrentHP);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMPUpdated, ATFT_UnitCharacter*, Unit, float, MaxMP, float, CurrentMP);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemInventoryUpdated, const TArray<FStruct_TFTItemInstance>&, InventoryItems);
+
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API UTFT_UISubsystem : public ULocalPlayerSubsystem
@@ -24,6 +27,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="TFT|UI")
 	FOnMPUpdated OnMPUpdated;
 	
+	UPROPERTY(BlueprintAssignable, Category="TFT|UI")
+	FOnItemInventoryUpdated OnItemInventoryUpdated;
+	
 	// ======== BroadCast ==========
 	UFUNCTION(BlueprintCallable, Category="TFT|UI")
 	void BroadcastStatUIOpen(bool bIsOpen, FStruct_TFT_Champion championdata, ATFT_UnitCharacter* Unit);
@@ -33,4 +39,7 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category="TFT|UI")
 	void BroadcastMPUpdate(ATFT_UnitCharacter* Unit, float MaxMP, float CurrentMP);
+	
+	UFUNCTION(BlueprintCallable, Category="TFT|UI")
+	void BroadcastItemInventoryUpdated(const TArray<FStruct_TFTItemInstance>& InventoryItems);
 };

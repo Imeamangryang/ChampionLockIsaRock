@@ -66,4 +66,8 @@ public:
 	
 	// 그리드 데이터에서 유닛 제거
 	void ClearUnitFromGrid(ATFT_UnitCharacter* TargetUnit);
+	
+	// 현재 필드에 올라와 있는 기물의 수를 반환
+	UFUNCTION(BlueprintCallable, Category = "Grid")
+	int32 GetUnitCountOnGrid() const;
 };

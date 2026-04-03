@@ -2,8 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "../Struct/FStruct_TFT_Champion.h"
-#include "../Struct/ETFT_ChampionList.h"
+#include "SHIN/Struct/FStruct_TFT_Champion.h"
+#include "SHIN/Struct/ETFT_ChampionList.h"
+#include "SHIN/Struct/TFT_ItemTypes.h"
 #include "TFT_UnitCharacter.generated.h"
 
 struct FTFT_ChampionData;
@@ -22,6 +23,10 @@ public:
 	
 	void PlayAttackMontageByInterval(float AttackRate);
 	
+	void PlayDeathMontage();
+	
+	void PlayDanceMontage();
+	
 	void StopMontage(float BlendOutTime = 0.15f);
 	
 	void UpdateHPBarWidget();
@@ -33,6 +38,9 @@ public:
 	void InitializeMesh();
 	
 	void InitWithChampionKey(ETFT_ChampionKey InChampionKey, int32 InStarLevel);
+	
+	UFUNCTION(blueprintCallable, Category="TFT|Item")
+	void ItemTest();
 	
 
 protected:
@@ -49,6 +57,27 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TFT|Item")
+	TArray<FStruct_TFTEquippedItemSlot> EquippedItemSlots;
+
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	void InitializeItemSlots();
+
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	int32 FindFirstEmptyItemSlot() const;
+
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	bool HasEmptyItemSlot() const;
+
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	bool TryEquipItem(const FStruct_TFTItemInstance& ItemInstance);
+
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	void RefreshItemSlotWidget();
+	
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
+	UTexture2D* GetItemIconByItemId(FName ItemId) const;
 	
 	// Data
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -77,6 +106,13 @@ public:
 	// Attack Montage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	class UAnimMontage* AttackMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	class UAnimMontage* DeathMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	class UAnimMontage* DanceMontage;
+	
 	
 	// Enemy 여부 (적이면 true, 아군이면 false)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

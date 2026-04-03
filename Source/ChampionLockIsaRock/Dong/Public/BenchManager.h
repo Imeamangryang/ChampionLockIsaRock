@@ -54,9 +54,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	
-	// 대기석은 한 줄이니까 칸 수만 정해줍니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bench Grid")
-	int32 MaxBenchSlots = 9; 
+	int32 MaxBenchSlots = 9; // 대기석 칸 수 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bench Grid")
 	float TileSize = 100.0f; // 타일 크기

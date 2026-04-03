@@ -48,6 +48,7 @@ void ATFT_UnitCharacter::BeginPlay()
 		// 적일 경우에도 피킹이 되지 않도록 무시
 		GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Ignore);
 	}
+	InitializeItemSlots();
 	
 	InitWithChampionKey(ChampionKey, starLevel);
 }
@@ -75,7 +76,7 @@ void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
 	}
 	
 	// 메시 설정 후 애니메이션 블루프린트도 설정
-	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/ABP_%s.ABP_%s_C"), *Name, *Name, *Name);
+	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s_Skeleton_AnimBlueprint.%s_Skeleton_AnimBlueprint_C"), *Name, *Name, *Name);
 
 	if (UClass* AnimClass = LoadObject<UClass>(nullptr, *AnimPath))
 	{
@@ -137,7 +138,7 @@ void ATFT_UnitCharacter::InitializeMesh()
 	}
 	
 	// 메시 설정 후 애니메이션 블루프린트도 설정
-	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/ABP_%s.ABP_%s_C"), *Name, *Name, *Name);
+	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s_Skeleton_AnimBlueprint.%s_Skeleton_AnimBlueprint_C"), *Name, *Name, *Name);
 
 	if (UClass* AnimClass = LoadObject<UClass>(nullptr, *AnimPath))
 	{
@@ -158,9 +159,25 @@ void ATFT_UnitCharacter::InitializeMesh()
 	{
 		AttackMontage = Montage;
 	}
-	else
+	
+	// DeathMontage
+	FString DeathMontagePath = FString::Printf(
+	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Death_Montage.Death_Montage"), *Name);
+	
+	UAnimMontage* TempMontage = LoadObject<UAnimMontage>(nullptr, *DeathMontagePath);
+	if (TempMontage)
+	{	
+		DeathMontage = TempMontage;
+	}
+	
+	// DanceMontage
+	FString DanceMontagePath = FString::Printf(
+	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Dance_Montage.Dance_Montage"), *Name);
+	
+	TempMontage = LoadObject<UAnimMontage>(nullptr, *DanceMontagePath);
+	if (TempMontage)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load Attack Montage: %s"), *MontagePath);
+		DanceMontage = TempMontage;
 	}
 }
 
@@ -268,6 +285,11 @@ void ATFT_UnitCharacter::StopMontage(float BlendOutTime)
 	{
 		AnimInstance->Montage_Stop(BlendOutTime, AttackMontage);
 	}
+	
+	if (AnimInstance->Montage_IsPlaying(DanceMontage))
+	{
+		AnimInstance->Montage_Stop(BlendOutTime, DanceMontage);
+	}
 }
 
 void ATFT_UnitCharacter::UpdateHPBarWidget()
@@ -336,4 +358,115 @@ void ATFT_UnitCharacter::PlayAttackMontageByInterval(float AttackRate)
 	const float PlayRate = MontageLength * AttackRate;
 
 	AnimInstance->Montage_Play(AttackMontage, PlayRate);
+}
+
+void ATFT_UnitCharacter::PlayDeathMontage()
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
+		return;
+	}
+	
+	AnimInstance->Montage_Play(DeathMontage);
+}
+
+void ATFT_UnitCharacter::PlayDanceMontage()
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
+		return;
+	}
+	
+	// 몽타주 수동으로 멈출때까지 반복 재생하도록 설정
+	AnimInstance->Montage_Play(DanceMontage, 1.f, EMontagePlayReturnType::MontageLength, 0.f, true);
+}
+
+void ATFT_UnitCharacter::InitializeItemSlots()
+{
+	EquippedItemSlots.SetNum(3);
+
+	for (FStruct_TFTEquippedItemSlot& Slot : EquippedItemSlots)
+	{
+		Slot.bOccupied = false;
+	}
+}
+
+int32 ATFT_UnitCharacter::FindFirstEmptyItemSlot() const
+{
+	for (int32 i = 0; i < EquippedItemSlots.Num(); ++i)
+	{
+		if (!EquippedItemSlots[i].bOccupied)
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
+}
+
+bool ATFT_UnitCharacter::HasEmptyItemSlot() const
+{
+	return FindFirstEmptyItemSlot() != INDEX_NONE;
+}
+
+bool ATFT_UnitCharacter::TryEquipItem(const FStruct_TFTItemInstance& ItemInstance)
+{
+	const int32 EmptyIndex = FindFirstEmptyItemSlot();
+	if (EmptyIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	EquippedItemSlots[EmptyIndex].bOccupied = true;
+	EquippedItemSlots[EmptyIndex].ItemInstance = ItemInstance;
+
+	RefreshItemSlotWidget();
+	return true;
+}
+
+void ATFT_UnitCharacter::RefreshItemSlotWidget()
+{
+	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	{
+		HPWidget->RefreshItemSlots();
+	}
+}
+
+UTexture2D* ATFT_UnitCharacter::GetItemIconByItemId(FName ItemId) const
+{
+	if (ItemId.IsNone())
+	{
+		return nullptr;
+	}
+
+	UTFT_GameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UTFT_GameInstance>() : nullptr;
+	if (!GI)
+	{
+		return nullptr;
+	}
+
+	UDataTable* ItemTable = GI->ItemDataTable.LoadSynchronous();
+	if (!ItemTable)
+	{
+		return nullptr;
+	}
+
+	const FStruct_TFTItemDefinition* ItemDef = ItemTable->FindRow<FStruct_TFTItemDefinition>(ItemId, TEXT("GetItemIconByItemId"));
+	if (!ItemDef)
+	{
+		return nullptr;
+	}
+
+	return ItemDef->Icon;
+}
+
+void ATFT_UnitCharacter::ItemTest()
+{
+	// Item Test
+	FStruct_TFTItemInstance TestItem;
+	TestItem.ItemId = TEXT("LordsEdge");
+	TryEquipItem(TestItem);
 }
