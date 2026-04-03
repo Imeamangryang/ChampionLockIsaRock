@@ -66,7 +66,20 @@ void ATFTStageManager::StartRound()
 	{
 		ActivePlayerUnits = PC->CachedGridManager->GetDeployedUnits();
 	}
-	 
+	
+	if (PC)
+	{
+		for (auto& Elem : PC->UnitHomeRegistry)
+		{
+			ATFT_UnitCharacter* Unit = Elem.Key;
+			if (IsValid(Unit))
+			{
+				// 현재 필드에 배치된 명단에 이 유닛이 없다면 대기석(true), 있다면 필드(false)
+				Unit->bIsBenched = !ActivePlayerUnits.Contains(Unit);
+			}
+		}
+	}
+	
 	bIsCombatActive = true;
 	if (PC)
 	{

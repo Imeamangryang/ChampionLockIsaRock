@@ -1,5 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "Dong/Public/TopDownController.h"
 #include "Dong/Public/BenchManager.h"
 #include "Dong/Public/GirdManager.h"
@@ -18,11 +16,23 @@
 #include "NiagaraFunctionLibrary.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "../SHIN/Subsystem/TFT_UISubsystem.h"
+#include "Blueprint/UserWidget.h"
+#include "SHIN/Character/UI/TFT_ItemDragDropOperation.h"
+#include "SHIN/Character/Components/TFT_ItemInventoryComponent.h"
+#include "SHIN/Character/UI/TFT_ItemDragLayerWidget.h"
 
 ATopDownController::ATopDownController()
 {
     bShowMouseCursor = true;
     PrimaryActorTick.bCanEverTick = true;
+	
+	ItemInventoryComponent = CreateDefaultSubobject<UTFT_ItemInventoryComponent>(TEXT("ItemInventoryComponent"));
+	
+	static ConstructorHelpers::FClassFinder<UTFT_ItemDragLayerWidget> ItemDragLayerBPClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_ItemDragLayer.WBP_ItemDragLayer_C"));
+	if (ItemDragLayerBPClass.Succeeded())
+	{
+		ItemDragLayerClass = ItemDragLayerBPClass.Class;
+	}
 }
  
 void ATopDownController::BeginPlay()
@@ -76,6 +86,17 @@ void ATopDownController::BeginPlay()
           HighlightActor->SetActorHiddenInGame(true);
        }
     }
+	
+	if (ItemDragLayerClass)
+	{
+		ItemDragLayerWidget = CreateWidget<UTFT_ItemDragLayerWidget>(this, ItemDragLayerClass);
+		if (ItemDragLayerWidget)
+		{
+			ItemDragLayerWidget->AddToViewport(9999);
+			ItemDragLayerWidget->SetOwningController(this);
+			ItemDragLayerWidget->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void ATopDownController::SetupInputComponent()
@@ -632,4 +653,67 @@ void ATopDownController::BroadcastUnitCount()
 
 	// 3. UI 쪽으로 숫자 2개를 담아서 방송 송출
 	OnUnitCountChanged.Broadcast(Current, Max);
+}
+
+void ATopDownController::HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition)
+{
+	CurrentItemDropTargetUnit = nullptr;
+
+	FHitResult HitResult;
+	if (GetHitResultAtScreenPosition(ScreenPosition, ECC_Visibility, false, HitResult))
+	{
+		if (ATFT_UnitCharacter* HitUnit = Cast<ATFT_UnitCharacter>(HitResult.GetActor()))
+		{
+			if (!HitUnit->bIsEnemy)
+			{
+				CurrentItemDropTargetUnit = HitUnit;
+			}
+		}
+	}
+}
+
+void ATopDownController::BeginItemDrag(const FStruct_TFTItemInstance& DraggedItem,
+	UTFT_ItemDragDropOperation* DragOperation)
+{
+	if (ItemDragLayerWidget)
+	{
+		ItemDragLayerWidget->SetVisibility(ESlateVisibility::Visible);
+	}
+	
+	bIsDraggingItem = true;
+	CurrentDraggedItem = DraggedItem;
+	CurrentItemDropTargetUnit = nullptr;
+
+	if (DragOperation)
+	{
+		DragOperation->OnDragScreenPositionUpdated.RemoveDynamic(this, &ATopDownController::HandleItemDragScreenPositionUpdated);
+		DragOperation->OnDragScreenPositionUpdated.AddDynamic(this, &ATopDownController::HandleItemDragScreenPositionUpdated);
+	}
+}
+
+void ATopDownController::EndItemDrag(bool bDroppedSuccessfully)
+{
+	if (!bIsDraggingItem)
+	{
+		return;
+	}
+
+	if (bDroppedSuccessfully && CurrentItemDropTargetUnit && ItemInventoryComponent)
+	{
+		const bool bEquipSuccess = CurrentItemDropTargetUnit->TryEquipItem(CurrentDraggedItem);
+		if (bEquipSuccess)
+		{
+			ItemInventoryComponent->RemoveItemByInstanceId(CurrentDraggedItem.InstanceId);
+			ItemInventoryComponent->NotifyInventoryUpdated();
+		}
+	}
+
+	bIsDraggingItem = false;
+	CurrentDraggedItem = FStruct_TFTItemInstance{};
+	CurrentItemDropTargetUnit = nullptr;
+	
+	if (ItemDragLayerWidget)
+	{
+		ItemDragLayerWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }

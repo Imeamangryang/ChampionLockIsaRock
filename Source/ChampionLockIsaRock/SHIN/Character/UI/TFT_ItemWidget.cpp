@@ -6,6 +6,7 @@
 #include "SHIN/GameFramework/TFT_GameInstance.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Input/Reply.h"
+#include "Dong/Public/TopDownController.h"
 
 void UTFT_ItemWidget::NativeConstruct()
 {
@@ -50,6 +51,7 @@ void UTFT_ItemWidget::RefreshItemVisual()
 		Brush.ImageSize = FVector2D(64.f, 64.f);
 		ItemIcon->SetBrush(Brush);
 	}
+	
 	else
 	{
 		ItemIcon->SetBrush(FSlateBrush());
@@ -89,4 +91,9 @@ void UTFT_ItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FP
 
 	DragOp->Pivot = EDragPivot::MouseDown;
 	OutOperation = DragOp;
+
+	if (ATopDownController* TDController = Cast<ATopDownController>(GetOwningPlayer()))
+	{
+		TDController->BeginItemDrag(ItemInstance, DragOp);
+	}
 }

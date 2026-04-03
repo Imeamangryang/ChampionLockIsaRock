@@ -7,6 +7,7 @@
 #include "Components/WidgetComponent.h"
 #include "UI/TFT_HPBarWidget.h"
 #include "Components/CapsuleComponent.h"
+#include "SHIN/Character/Components/TFT_ItemInventoryComponent.h"
 
 ATFT_UnitCharacter::ATFT_UnitCharacter()
 {

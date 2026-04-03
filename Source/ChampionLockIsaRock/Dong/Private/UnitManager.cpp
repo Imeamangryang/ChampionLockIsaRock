@@ -46,7 +46,7 @@ void AUnitManager::Tick(float DeltaTime)
         }
     }
 }
-
+ 
 void AUnitManager::TryUpgradeUnit(ETFT_ChampionKey UnitKey, int32 StarLevel)
 {
     if (StarLevel >= 3 || bIsEvolving) return; // 이미 합체 중이면 중복 방지
@@ -109,20 +109,21 @@ void AUnitManager::TryUpgradeUnit(ETFT_ChampionKey UnitKey, int32 StarLevel)
 void AUnitManager::FinishUpgrade(ATFT_UnitCharacter* TargetUnit, ATFT_UnitCharacter* F1, ATFT_UnitCharacter* F2, ETFT_ChampionKey UnitKey, int32 NewStarLevel)
 {
     if (!TargetUnit || !F1 || !F2) return;
-
-    // 명단 삭제 및 파괴
-    if (BenchManager)
-    {
-        BenchManager->ClearUnitFromBench(F1); BenchManager->ClearUnitFromBench(F2);
-    }
     
     ATopDownController* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController());
     
-    if (BenchManager) {
+    if (BenchManager) 
+    {
         BenchManager->ClearUnitFromBench(F1);
         BenchManager->ClearUnitFromBench(F2);
     }
 
+    if (PC)
+    {
+        PC->UnitHomeRegistry.Remove(F1);
+        PC->UnitHomeRegistry.Remove(F2);
+    }
+    
     F1->Destroy();
     F2->Destroy();
 

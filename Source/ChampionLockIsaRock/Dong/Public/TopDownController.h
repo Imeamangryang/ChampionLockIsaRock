@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "SHIN/Struct/TFT_ItemTypes.h"
 #include "TopDownController.generated.h"
 
 // 전방 선언 (헤더 포함을 최소화하여 컴파일 속도를 높이고 꼬임을 방지)
@@ -14,6 +15,10 @@ class UInputAction;
 class ATFT_UnitCharacter;
 class AGirdManager;
 class ABenchManager;
+class UTFT_ItemDragDropOperation;
+class UTFT_ItemInventoryComponent;
+class UTFT_ItemDragLayerWidget;
+class UUserWidget;
 
 DECLARE_MULTICAST_DELEGATE(FOnReturnAllUnitsHome);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnUnitCountChangedSignature, int32, CurrentUnits, int32, MaxUnits);
@@ -171,4 +176,36 @@ protected:
     UPROPERTY(EditAnywhere, Category = "TFT|Spawn")
     TSubclassOf<class ATFT_UnitCharacter> UnitClass;
     
+    
+    // ========= 준섭이꺼 =========
+public:
+    
+    // Inventory Component
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    class UTFT_ItemInventoryComponent* ItemInventoryComponent;
+    
+    UFUNCTION()
+    void HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition);
+
+    UFUNCTION(BlueprintCallable)
+    void BeginItemDrag(const FStruct_TFTItemInstance& DraggedItem, UTFT_ItemDragDropOperation* DragOperation);
+
+    UFUNCTION(BlueprintCallable)
+    void EndItemDrag(bool bDroppedSuccessfully);
+
+protected:
+    UPROPERTY()
+    bool bIsDraggingItem = false;
+
+    UPROPERTY()
+    FStruct_TFTItemInstance CurrentDraggedItem;
+
+    UPROPERTY()
+    TObjectPtr<ATFT_UnitCharacter> CurrentItemDropTargetUnit = nullptr; 
+    
+    UPROPERTY(EditDefaultsOnly, Category="TFT|UI")
+    TSubclassOf<UUserWidget> ItemDragLayerClass;
+
+    UPROPERTY()
+    UTFT_ItemDragLayerWidget* ItemDragLayerWidget = nullptr;
 };

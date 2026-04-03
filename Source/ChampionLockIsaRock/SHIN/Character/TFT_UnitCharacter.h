@@ -121,4 +121,6 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 starLevel = 1; 
+	
+	bool bIsBenched = true;
 };

@@ -220,6 +220,12 @@ void UTFT_CombatComponent::FindTarget()
 		{
 			continue;
 		}
+		
+		// 대기석 제외
+		if (Candidate->bIsBenched)
+		{
+			continue;
+		}
 
 		// TODO:
 		// 나중에 아래 조건들 추가 추천
