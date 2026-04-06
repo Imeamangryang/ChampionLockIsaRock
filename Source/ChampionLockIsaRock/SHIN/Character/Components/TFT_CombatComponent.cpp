@@ -6,6 +6,7 @@
 #include "Components/CapsuleComponent.h"
 #include "../../Dong/Public/TopDownController.h"
 #include "Kismet/GameplayStatics.h"
+#include "SHIN/Actors/TFT_DamageTextActor.h"
 
 UTFT_CombatComponent::UTFT_CombatComponent()
 {
@@ -359,7 +360,7 @@ void UTFT_CombatComponent::AttackTarget()
 
 void UTFT_CombatComponent::OnAttackHitNotify()
 {
-	if (OwnerCharacter == nullptr || CurrentTarget == nullptr)
+	if (OwnerCharacter == nullptr || CurrentTarget == nullptr || CurrentTarget->StatComponent == nullptr)
 	{
 		return;
 	}
@@ -376,26 +377,46 @@ void UTFT_CombatComponent::OnAttackHitNotify()
 		return;
 	}
 
-	const float Damage = OwnerCharacter->StatComponent
+	const int32 Damage = OwnerCharacter->StatComponent
 		? OwnerCharacter->StatComponent->AttackDamage
-		: 0.f;
+		: 0;
 
-	if (Damage <= 0.f)
+	if (Damage <= 0)
 	{
 		return;
 	}
 
-	CurrentTarget->StatComponent->ApplyDamage(Damage);
+	const FTFTDamageResult DamageResult = CurrentTarget->StatComponent->ApplyDamage(Damage, OwnerCharacter);
+
+	if (DamageResult.FinalDamage > 0)
+	{
+		const FVector SpawnLocation = CurrentTarget->GetActorLocation(); // + FVector(0.f, 0.f, 150.f);
+
+		if (UWorld* World = GetWorld())
+		{
+			ATFT_DamageTextActor* DamageTextActor = World->SpawnActor<ATFT_DamageTextActor>(
+				ATFT_DamageTextActor::StaticClass(),
+				SpawnLocation,
+				FRotator::ZeroRotator
+			);
+
+			if (DamageTextActor)
+			{
+				DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
+			}
+		}
+	}
 
 	if (OwnerCharacter->StatComponent)
 	{
-		OwnerCharacter->StatComponent->AddMana(10.f);
+		OwnerCharacter->StatComponent->AddMana(10);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("%s dealt %.1f damage to %s (Target HP: %d)"),
+	UE_LOG(LogTemp, Log, TEXT("%s dealt %d damage to %s%s (Target HP: %d)"),
 		*OwnerCharacter->GetChampionNameString(),
-		Damage,
+		DamageResult.FinalDamage,
 		*CurrentTarget->GetChampionNameString(),
+		DamageResult.bIsCritical ? TEXT(" [CRITICAL]") : TEXT(""),
 		CurrentTarget->StatComponent->Health);
 }
 

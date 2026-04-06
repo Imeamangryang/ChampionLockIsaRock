@@ -8,6 +8,7 @@
 #include "UI/TFT_HPBarWidget.h"
 #include "Components/CapsuleComponent.h"
 #include "SHIN/Character/Components/TFT_ItemInventoryComponent.h"
+#include "SHIN/Struct/BaseModifier.h"
 
 ATFT_UnitCharacter::ATFT_UnitCharacter()
 {
@@ -219,6 +220,7 @@ void ATFT_UnitCharacter::InitWithChampionKey(ETFT_ChampionKey InChampionKey, int
 	}
 }
 
+
 FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_ChampionData& Data)
 {
 	FStruct_TFT_Champion Result;
@@ -429,10 +431,36 @@ bool ATFT_UnitCharacter::TryEquipItem(const FStruct_TFTItemInstance& ItemInstanc
 		return false;
 	}
 
+	UTFT_GameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UTFT_GameInstance>() : nullptr;
+	if (!GI)
+	{
+		return false;
+	}
+
+	UDataTable* ItemTable = GI->ItemDataTable.LoadSynchronous();
+	if (!ItemTable)
+	{
+		return false;
+	}
+
+	const FStruct_TFTItemDefinition* ItemDef = ItemTable->FindRow<FStruct_TFTItemDefinition>(ItemInstance.ItemId, TEXT("TryEquipItem"));
+	if (!ItemDef)
+	{
+		return false;
+	}
+
 	EquippedItemSlots[EmptyIndex].bOccupied = true;
 	EquippedItemSlots[EmptyIndex].ItemInstance = ItemInstance;
 
+	if (StatComponent)
+	{
+		const TArray<FBaseModifier> ItemModifiers = BuildItemModifiers(*ItemDef, this);
+		StatComponent->AddModifiers(ItemModifiers);
+	}
+
 	RefreshItemSlotWidget();
+	UpdateHPBarWidget();
+	UpdateMPBarWidget();
 	return true;
 }
 
@@ -478,4 +506,47 @@ void ATFT_UnitCharacter::ItemTest()
 	FStruct_TFTItemInstance TestItem;
 	TestItem.ItemId = TEXT("LordsEdge");
 	TryEquipItem(TestItem);
+}
+
+// modifier Helper 함수
+TArray<FBaseModifier> ATFT_UnitCharacter::BuildItemModifiers(const FStruct_TFTItemDefinition& ItemDef, UObject* Source)
+{
+	TArray<FBaseModifier> Result;
+
+	if (ItemDef.StatBonus.AttackDamage != 0)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::AttackDamage, EModifierOperation::Add, (float)ItemDef.StatBonus.AttackDamage, Source));
+	}
+
+	if (ItemDef.StatBonus.AbilityPower != 0)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::AbilityPower, EModifierOperation::Add, (float)ItemDef.StatBonus.AbilityPower, Source));
+	}
+
+	if (ItemDef.StatBonus.AttackSpeed != 0.0f)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::AttackSpeed, EModifierOperation::Add, ItemDef.StatBonus.AttackSpeed, Source));
+	}
+
+	if (ItemDef.StatBonus.CriticalChance != 0.0f)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::CriticalChance, EModifierOperation::Add, ItemDef.StatBonus.CriticalChance, Source));
+	}
+
+	if (ItemDef.StatBonus.Health != 0)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::Health, EModifierOperation::Add, (float)ItemDef.StatBonus.Health, Source));
+	}
+
+	if (ItemDef.StatBonus.Armor != 0)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::Armor, EModifierOperation::Add, (float)ItemDef.StatBonus.Armor, Source));
+	}
+
+	if (ItemDef.StatBonus.MagicResist != 0)
+	{
+		Result.Add(FBaseModifier(ETFTModifiedStat::MagicResist, EModifierOperation::Add, (float)ItemDef.StatBonus.MagicResist, Source));
+	}
+
+	return Result;
 }

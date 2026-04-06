@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "SHIN/Struct/BaseModifier.h"
 #include "SHIN/Struct/FStruct_TFT_Champion.h"
 #include "SHIN/Struct/ETFT_ChampionList.h"
 #include "SHIN/Struct/TFT_ItemTypes.h"
@@ -39,6 +40,8 @@ public:
 	void InitializeMesh();
 	
 	void InitWithChampionKey(ETFT_ChampionKey InChampionKey, int32 InStarLevel);
+	
+	static TArray<FBaseModifier> BuildItemModifiers(const FStruct_TFTItemDefinition& ItemDef, UObject* Source);
 	
 	UFUNCTION(blueprintCallable, Category="TFT|Item")
 	void ItemTest();
