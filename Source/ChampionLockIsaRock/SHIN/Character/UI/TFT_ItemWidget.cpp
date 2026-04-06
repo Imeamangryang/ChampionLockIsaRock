@@ -81,6 +81,7 @@ void UTFT_ItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FP
 	}
 
 	DragOp->DraggedItemInstance = ItemInstance;
+	DragOp->SourceItemWidget = this;
 
 	UTFT_ItemWidget* DragVisualWidget = CreateWidget<UTFT_ItemWidget>(GetWorld(), GetClass());
 	if (DragVisualWidget)
@@ -88,6 +89,8 @@ void UTFT_ItemWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FP
 		DragVisualWidget->SetItemInstance(ItemInstance);
 		DragOp->DefaultDragVisual = DragVisualWidget;
 	}
+	
+	SetVisibility(ESlateVisibility::Hidden);
 
 	DragOp->Pivot = EDragPivot::MouseDown;
 	OutOperation = DragOp;

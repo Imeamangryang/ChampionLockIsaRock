@@ -43,4 +43,11 @@ protected:
 	
 	UPROPERTY()
 	TObjectPtr<UUserWidget> StageTimerUIInstance;
+	
+	// Synergy UI
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="UI")
+	TSubclassOf<UUserWidget> SynergyClass;
+	
+	UPROPERTY()
+	TObjectPtr<UUserWidget> SynergyUIInstance;
 };

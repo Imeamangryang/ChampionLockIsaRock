@@ -7,6 +7,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemDragScreenPositionUpdated, FVector2D, ScreenPosition);
 
+class UTFT_ItemWidget;
+
 UCLASS()
 class CHAMPIONLOCKISAROCK_API UTFT_ItemDragDropOperation : public UDragDropOperation
 {
@@ -18,6 +20,9 @@ public:
 	
 	UPROPERTY(BlueprintAssignable, Category="TFT|Item")
 	FOnItemDragScreenPositionUpdated OnDragScreenPositionUpdated;
+	
+	UPROPERTY()
+	TObjectPtr<UTFT_ItemWidget> SourceItemWidget = nullptr;
 
 	virtual void Dragged_Implementation(const FPointerEvent& PointerEvent) override;
 	virtual void Drop_Implementation(const FPointerEvent& PointerEvent) override;

@@ -50,7 +50,7 @@ private:
 	UPROPERTY() ATFT_UnitCharacter* MainUnit_Ptr;
 	UPROPERTY() ATFT_UnitCharacter* Fodder1_Ptr;
 	UPROPERTY() ATFT_UnitCharacter* Fodder2_Ptr;
-
+ 
 	FVector F1_StartLoc;
 	FVector F2_StartLoc;
 	ETFT_ChampionKey PendingKey;

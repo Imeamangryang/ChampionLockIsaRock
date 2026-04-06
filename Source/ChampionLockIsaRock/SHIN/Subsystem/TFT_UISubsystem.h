@@ -6,7 +6,7 @@
 #include "Dong/Public/TFTPlayerState.h"
 #include "TFT_UISubsystem.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnStatUIOpen, bool, bIsOpen, FStruct_TFT_Champion, ChampionData, ATFT_UnitCharacter*, Unit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnStatUIOpen, bool, bIsOpen, ATFT_UnitCharacter*, Unit);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHPUpdated, ATFT_UnitCharacter*, Unit, float, MaxHP, float, CurrentHP);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnMPUpdated, ATFT_UnitCharacter*, Unit, float, MaxMP, float, CurrentMP);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemInventoryUpdated, const TArray<FStruct_TFTItemInstance>&, InventoryItems);
@@ -40,7 +40,7 @@ public:
 	
 	// ======== BroadCast ==========
 	UFUNCTION(BlueprintCallable, Category="TFT|UI")
-	void BroadcastStatUIOpen(bool bIsOpen, FStruct_TFT_Champion championdata, ATFT_UnitCharacter* Unit);
+	void BroadcastStatUIOpen(bool bIsOpen,ATFT_UnitCharacter* Unit);
 	
 	UFUNCTION(BlueprintCallable, Category="TFT|UI")
 	void BroadcastHPUpdate(ATFT_UnitCharacter* Unit, float MaxHP, float CurrentHP);

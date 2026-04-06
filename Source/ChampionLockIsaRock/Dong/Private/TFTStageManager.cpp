@@ -29,7 +29,7 @@ void ATFTStageManager::BeginPlay()
 	// 게임 시작하자마자 0번 스테이지(1렙) 적들을 소환해라!
 	SetupStage(0);
 }
-
+ 
 void ATFTStageManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -74,13 +74,18 @@ void ATFTStageManager::StartRound()
 			ATFT_UnitCharacter* Unit = Elem.Key;
 			if (IsValid(Unit))
 			{
-				// 현재 필드에 배치된 명단에 이 유닛이 없다면 대기석(true), 있다면 필드(false)
-				Unit->bIsBenched = !ActivePlayerUnits.Contains(Unit);
+				if (Unit->bIsEnemy == false)
+				{
+					// 현재 필드에 배치된 명단에 이 유닛이 없다면 대기석(true), 있다면 필드(false)
+					Unit->bIsBenched = !ActivePlayerUnits.Contains(Unit);
+				}
 			}
 		}
 	}
-	
+	 
 	bIsCombatActive = true;
+	
+	UE_LOG(LogTemp, Error, TEXT("!!! 출전하는 아군 수: %d 명 !!!"), ActivePlayerUnits.Num());
 	if (PC)
 	{
 		PC->BroadcastUnitCount();
@@ -171,15 +176,18 @@ void ATFTStageManager::SetupStage(int32 Index)
 	for (const auto& Info : StageDataList[Index].Enemies)
 	{
 		if (!Info.EnemyClass) continue; 
-		
+    
 		FVector WorldSpawnLoc = GetActorLocation() + Info.EnemySpawnLocations;
 
 		if (auto NewEnemy = GetWorld()->SpawnActor<ATFT_UnitCharacter>(Info.EnemyClass, WorldSpawnLoc, FRotator(0, 0, 0)))
 		{
 			// 강제로 적군(Enemy) 판정 먹이기
 			NewEnemy->bIsEnemy = true;
-			NewEnemy->InitWithChampionKey(Info.ChampionKey, Info.StarLevel);
 			
+			NewEnemy->bIsBenched = false; 
+
+			NewEnemy->InitWithChampionKey(Info.ChampionKey, Info.StarLevel);
+        
 			// 소환된 적을 전투 명단(Active)뿐만 아니라 '전체 명단(Spawned)'에도 넣습니다.
 			ActiveEnemyUnits.Add(NewEnemy);
 			SpawnedEnemies.Add(NewEnemy);
@@ -309,6 +317,11 @@ void ATFTStageManager::ProceedToNextRound()
 				PC->BroadcastUnitCount();
 		}
 	}
+	if (ATopDownController* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController()))
+	{
+		PC->ProcessPendingUpgrades();
+	}
+	
 	// UI들에게 준비 시작이라고 알림
 	OnPreparationStarted.Broadcast();
 }

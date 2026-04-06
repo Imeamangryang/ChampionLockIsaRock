@@ -26,6 +26,12 @@ ATFT_HUD::ATFT_HUD()
 	{
 		StageTimerClass = StageTimerBPClass.Class;
 	}
+	
+	static ConstructorHelpers::FClassFinder<UUserWidget> SynergyBPClass(TEXT("/Game/Dong/UI/WBP/WBP_SynergyPanel.WBP_SynergyPanel_C"));
+	if (SynergyBPClass.Succeeded())
+	{
+		SynergyClass = SynergyBPClass.Class;
+	}
 }
 
 void ATFT_HUD::BeginPlay()
@@ -45,4 +51,7 @@ void ATFT_HUD::BeginPlay()
 	
 	StageTimerUIInstance = CreateWidget<UUserWidget>(PC, StageTimerClass);
 	StageTimerUIInstance->AddToViewport();
+	
+	SynergyUIInstance = CreateWidget<UUserWidget>(PC, SynergyClass);
+	SynergyUIInstance->AddToViewport();
 }

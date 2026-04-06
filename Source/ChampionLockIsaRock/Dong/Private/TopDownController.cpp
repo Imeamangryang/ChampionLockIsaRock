@@ -1,9 +1,12 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
 #include "Dong/Public/TopDownController.h"
 #include "Dong/Public/BenchManager.h"
 #include "Dong/Public/GirdManager.h"
 #include "Dong/Public/UnitManager.h"
 #include "Dong/Public/TFTPlayerState.h"
 #include "Dong/Public/TFTStageManager.h"
+#include "Dong/Synergy/TFT_SynergyComponent.h"
 #include "Engine/HitResult.h"
 #include "EngineUtils.h"
 #include "Engine/LocalPlayer.h"
@@ -20,6 +23,7 @@
 #include "SHIN/Character/UI/TFT_ItemDragDropOperation.h"
 #include "SHIN/Character/Components/TFT_ItemInventoryComponent.h"
 #include "SHIN/Character/UI/TFT_ItemDragLayerWidget.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
 
 ATopDownController::ATopDownController()
 {
@@ -254,106 +258,112 @@ void ATopDownController::PerformDrop()
 	        }
         }
     		// 1. 함수 대신 수학적 거리로 벤치에서 왔는지 판별합니다.
-    		bool bIsComingFromBench = false;
-    		if (CachedBenchManager && CachedGridManager)
-    		{
-    			float DistFromBench = FVector::Dist2D(OriginalLocation, CachedBenchManager->GetSnappedBenchLocation(OriginalLocation));
-    			float DistFromGrid = FVector::Dist2D(OriginalLocation, CachedGridManager->GetSnappedLocation(OriginalLocation));
-        
-    			// 원래 위치가 그리드보다 벤치에 더 가까웠다면, 벤치에서 온 기물로 판정!
-    			bIsComingFromBench = (DistFromBench < DistFromGrid); 
-    		}
+    	bool bIsComingFromBench = false;
+           if (CachedBenchManager && CachedGridManager)
+           {
+              float DistFromBench = FVector::Dist2D(OriginalLocation, CachedBenchManager->GetSnappedBenchLocation(OriginalLocation));
+              float DistFromGrid = FVector::Dist2D(OriginalLocation, CachedGridManager->GetSnappedLocation(OriginalLocation));
+              bIsComingFromBench = (DistFromBench < DistFromGrid); 
+           }
+
+       // =========================================================
+       // 1차 검사: 타일에 놓았는가? + 인원수 컷에 걸리지 않는가?
+       // =========================================================
+       FVector DropLoc = FVector(FinalSnappedLoc.X, FinalSnappedLoc.Y, OriginalLocation.Z);
+       TArray<AActor*> OverlappedActors;
+       
        if (bIsValidDrop)
        {
-    		// 2. 벤치에서 필드로 향하는 경우에만 인원수 체크!
-    		if (!bGoingToBench && bIsComingFromBench)
-    		{
-    			ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>();
-    			if (PS && CachedGridManager)
-    			{
-    				// 주의: GridManager.h와 .cpp에 GetUnitCountOnGrid() 함수가 구현되어 있어야 합니다!
-    				int32 CurrentUnitsOnGrid = CachedGridManager->GetUnitCountOnGrid();
-               
-    				// 현재 필드 인원수가 플레이어 레벨과 같거나 크다면?
-    				if (CurrentUnitsOnGrid >= PS->PlayerLevel)
-    				{
-    					// 배치 실패 처리 (아래의 else문으로 빠져서 제자리로 돌아가게 함)
-    					UE_LOG(LogTemp, Warning, TEXT("레벨이 낮아 기물을 더 배치할 수 없습니다. 현재 필드 기물 수: %d, 레벨: %d"), CurrentUnitsOnGrid, PS->PlayerLevel);
-    					bIsValidDrop = false; 
-    				}
-    			}
-    		}
-    	}
-    	
-    	// 5. 유효한 타일에 놓았을 때
-    	if (bIsValidDrop)
+           UKismetSystemLibrary::SphereOverlapActors(GetWorld(), DropLoc, 60.0f, {UEngineTypes::ConvertToObjectType(ECC_Pawn)}, ATFT_UnitCharacter::StaticClass(), {GrabbedUnit}, OverlappedActors);
+           
+           bool bIsSwapping = (OverlappedActors.Num() > 0);
+
+           // 벤치 -> 필드 빈자리로 가는 경우에만 인원수 체크
+           if (!bGoingToBench && bIsComingFromBench && !bIsSwapping)
+           {
+              ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>();
+              if (PS && CachedGridManager)
+              {
+                 int32 CurrentUnitsOnGrid = CachedGridManager->GetUnitCountOnGrid();
+                 if (CurrentUnitsOnGrid >= PS->PlayerLevel)
+                 {
+                    UE_LOG(LogTemp, Warning, TEXT("레벨이 낮아 기물을 더 배치할 수 없습니다. 현재 필드 기물 수: %d, 레벨: %d"), CurrentUnitsOnGrid, PS->PlayerLevel);
+                    bIsValidDrop = false; // 인원수 초과 시 여기서 드롭 무효화!
+                 }
+              }
+           }
+       }
+
+       // =========================================================
+       // 2차 실행: 검사 통과 여부에 따라 이동 or 튕겨내기
+       // =========================================================
+       if (bIsValidDrop)
+       {
+           // 통과! 장부에서 지우고 위치 이동/스왑 처리
+           if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(GrabbedUnit);
+           if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(GrabbedUnit);
+
+           if (OverlappedActors.Num() > 0)
+           {
+              // 스왑 로직
+              ATFT_UnitCharacter* OtherUnit = Cast<ATFT_UnitCharacter>(OverlappedActors[0]);
+           	
+           	  if (bIsComingFromBench) OtherUnit->bIsBenched = true; 
+           	  else OtherUnit->bIsBenched = false; // 내가 필드에서 들고 왔다면, 벤치에 있던 녀석은 필드로 나가니까 false입니다.
+      
+              if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(OtherUnit);
+              if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(OtherUnit);
+
+              FVector OtherUnitLoc = OtherUnit->GetActorLocation();
+              GrabbedUnit->SetActorLocation(FVector(OtherUnitLoc.X, OtherUnitLoc.Y, OriginalLocation.Z));
+              OtherUnit->SetActorLocation(OriginalLocation);
+
+              if (bIsComingFromBench)
+              {
+                 int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+                 if (EmptyIndex != -1) CachedBenchManager->RegisterUnitToSlot(EmptyIndex, OtherUnit);
+              }
+              else
+              {
+                 CachedGridManager->RegisterUnitToGrid(OtherUnit);
+              }
+      
+              UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
+              UnitHomeRegistry.Add(OtherUnit, OtherUnit->GetActorTransform());
+           }
+           else
+           {
+              // 빈칸 이동 로직
+              GrabbedUnit->SetActorLocation(DropLoc);
+           }
+           
+           // 도착한 곳에 따라 내 기물 장부에 기입
+           if (bGoingToBench && CachedBenchManager)
+           {
+           	 GrabbedUnit->bIsBenched = true; // 벤치로 갔으니 true로 설정
+              
+           	 int32 NewSlotIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+           	 if (NewSlotIndex != -1) CachedBenchManager->RegisterUnitToSlot(NewSlotIndex, GrabbedUnit);
+           }
+           else if (!bGoingToBench && CachedGridManager)
+           {
+           	 GrabbedUnit->bIsBenched = false; // 필드로 나왔으니 false
+              
+           	 CachedGridManager->RegisterUnitToGrid(GrabbedUnit);
+           }
+   
+       	  UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
+       }
+       else
+       {
+       	// 타일을 벗어났거나, 인원수 제한에 걸려 bIsValidDrop이 false가 되면 무조건 여기로 와서 제자리로 돌아갑니다
+       	GrabbedUnit->SetActorLocation(OriginalLocation);
+       }
+    	// 기물 이동이 완료되었으니 시너지를 다시 계산합니다.
+    	if (UTFT_SynergyComponent* SynergyComp = FindComponentByClass<UTFT_SynergyComponent>())
     	{
-    		// [무조건 실행] 일단 어디에 있든 대기석과 그리드 장부에서 이 유닛을 지웁니다 (이동 전 세탁)
-    		if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(GrabbedUnit);
-    		if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(GrabbedUnit);
-   
-    		FVector DropLoc = FVector(FinalSnappedLoc.X, FinalSnappedLoc.Y, OriginalLocation.Z);
-    		TArray<AActor*> OverlappedActors;
-    		UKismetSystemLibrary::SphereOverlapActors(GetWorld(), DropLoc, 60.0f, {UEngineTypes::ConvertToObjectType(ECC_Pawn)}, ATFT_UnitCharacter::StaticClass(), {GrabbedUnit}, OverlappedActors);
-    		
-    		if (OverlappedActors.Num() > 0)
-    		{
-    			// 서로의 위치를 맞바꿈
-    			ATFT_UnitCharacter* OtherUnit = Cast<ATFT_UnitCharacter>(OverlappedActors[0]);
-      
-    			// 상대방 유닛도 장부에서 일단 지워줍니다 (그래야 꼬이지 않음)
-    			if (CachedBenchManager) CachedBenchManager->ClearUnitFromBench(OtherUnit);
-    			if (CachedGridManager) CachedGridManager->ClearUnitFromGrid(OtherUnit);
-
-    			FVector OtherUnitLoc = OtherUnit->GetActorLocation();
-    			GrabbedUnit->SetActorLocation(FVector(OtherUnitLoc.X, OtherUnitLoc.Y, OriginalLocation.Z));
-    			OtherUnit->SetActorLocation(OriginalLocation);
-
-    			if (bIsComingFromBench)
-    			{
-    				// 내가 벤치에서 왔다면, 상대방은 이제 벤치로 간 것임
-    				int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
-    				if (EmptyIndex != -1) CachedBenchManager->RegisterUnitToSlot(EmptyIndex, OtherUnit);
-    			}
-    			else
-    			{
-    				// 내가 그리드에서 왔다면, 상대방은 이제 그리드로 간 것임
-    				CachedGridManager->RegisterUnitToGrid(OtherUnit);
-    			}
-      
-    			// 스왑된 두 기물의 주소록 최신화
-    			UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
-    			UnitHomeRegistry.Add(OtherUnit, OtherUnit->GetActorTransform());
-    		}
-    		else
-    		{
-    			// 빈칸 이동 로직
-    			GrabbedUnit->SetActorLocation(DropLoc);
-    		}
-    		
-    		//이제 GrabbedUnit이 최종적으로 도착한 곳에 따라 장부에 기입
-    		if (bGoingToBench && CachedBenchManager)
-    		{
-    			int32 NewSlotIndex = CachedBenchManager->GetFirstEmptySlotIndex();
-    			if (NewSlotIndex != -1)
-    			{
-    				CachedBenchManager->RegisterUnitToSlot(NewSlotIndex, GrabbedUnit);
-    			}
-    		}
-    		else if (!bGoingToBench && CachedGridManager)
-    		{
-    			// 그리드 장부에 등록
-    			CachedGridManager->RegisterUnitToGrid(GrabbedUnit);
-    		}
-   
-    		// 주소록 최신화
-    		UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
+    		SynergyComp->RecalculateSynergies();
     	}
-        else
-        {
-            // 허공에 놓았을 때 제자리로 튕겨냄
-            GrabbedUnit->SetActorLocation(OriginalLocation);
-        }
     }
 	BroadcastUnitCount();
     // 상태 초기화 및 시각적 요소(가이드라인, 하이라이트) 숨김
@@ -417,14 +427,14 @@ void ATopDownController::OnMoveInputReleased()
 		{
 			if (HitActor->IsA<ATFT_UnitCharacter>())
 			{
-				UISubsystem->BroadcastStatUIOpen(true, Cast<ATFT_UnitCharacter>(HitActor)->ChampionData, Cast<ATFT_UnitCharacter>(HitActor));
+				UISubsystem->BroadcastStatUIOpen(true, Cast<ATFT_UnitCharacter>(HitActor));
 				return;
 			}
 		}
 	}
 
 	// 아니면  UI 닫기
-	UISubsystem->BroadcastStatUIOpen(false, FStruct_TFT_Champion{}, nullptr);
+	UISubsystem->BroadcastStatUIOpen(false, nullptr);
 	
 	FHitResult GroundHit;
 	if (GetHitResultUnderCursor(ECC_WorldStatic, true, GroundHit))
@@ -632,6 +642,12 @@ void ATopDownController::ExecuteSellUnit(ATFT_UnitCharacter* UnitToSell)
 	// 5. 기물 완전 파괴
 	UnitToSell->Destroy();
 	BroadcastUnitCount();
+	
+	// 기물이 팔렸으니 시너지를 다시 계산합니다.
+	if (UTFT_SynergyComponent* SynergyComp = FindComponentByClass<UTFT_SynergyComponent>())
+	{
+		SynergyComp->RecalculateSynergies();
+	}
 }
 
 void ATopDownController::BroadcastUnitCount()
@@ -655,20 +671,64 @@ void ATopDownController::BroadcastUnitCount()
 	OnUnitCountChanged.Broadcast(Current, Max);
 }
 
-void ATopDownController::HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition)
+void ATopDownController::ProcessPendingUpgrades()
 {
-	CurrentItemDropTargetUnit = nullptr;
+	if (PendingUpgradeKeys.IsEmpty()) return;
 
-	FHitResult HitResult;
-	if (GetHitResultAtScreenPosition(ScreenPosition, ECC_Visibility, false, HitResult))
+	AUnitManager* UnitManager = Cast<AUnitManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AUnitManager::StaticClass()));
+	if (!UnitManager) return;
+
+	// 원본을 복사해두고 즉시 비움
+	TArray<ETFT_ChampionKey> KeysToProcess = PendingUpgradeKeys;
+	PendingUpgradeKeys.Empty();
+
+	for (ETFT_ChampionKey Key : KeysToProcess)
 	{
-		if (ATFT_UnitCharacter* HitUnit = Cast<ATFT_UnitCharacter>(HitResult.GetActor()))
+		UnitManager->TryUpgradeUnit(Key, 1); 
+		UnitManager->TryUpgradeUnit(Key, 2); 
+	}
+}
+
+void ATopDownController::EndItemDrag(bool bDroppedSuccessfully)
+{
+	if (!bIsDraggingItem)
+	{
+		return;
+	}
+
+	ATFT_UnitCharacter* DropTargetUnit = nullptr;
+
+	if (bDroppedSuccessfully)
+	{
+		DropTargetUnit = FindItemDropTargetAtScreenPosition(LastKnownItemDragScreenPosition);
+	}
+
+	if (bDroppedSuccessfully && DropTargetUnit && ItemInventoryComponent)
+	{
+		const bool bEquipSuccess = DropTargetUnit->TryEquipItem(CurrentDraggedItem);
+		if (bEquipSuccess)
 		{
-			if (!HitUnit->bIsEnemy)
+			ItemInventoryComponent->RemoveItemByInstanceId(CurrentDraggedItem.InstanceId);
+			ItemInventoryComponent->NotifyInventoryUpdated();
+		}
+		
+		if (ULocalPlayer* LP = GetLocalPlayer())
+		{
+			if (UTFT_UISubsystem* UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>())
 			{
-				CurrentItemDropTargetUnit = HitUnit;
+				UISubsystem->BroadcastStatUIOpen(true, DropTargetUnit);
 			}
 		}
+	}
+
+	bIsDraggingItem = false;
+	CurrentDraggedItem = FStruct_TFTItemInstance{};
+	CurrentItemDropTargetUnit = nullptr;
+	LastKnownItemDragScreenPosition = FVector2D::ZeroVector;
+
+	if (ItemDragLayerWidget)
+	{
+		ItemDragLayerWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -683,7 +743,8 @@ void ATopDownController::BeginItemDrag(const FStruct_TFTItemInstance& DraggedIte
 	bIsDraggingItem = true;
 	CurrentDraggedItem = DraggedItem;
 	CurrentItemDropTargetUnit = nullptr;
-
+	LastKnownItemDragScreenPosition = FVector2D::ZeroVector;
+	
 	if (DragOperation)
 	{
 		DragOperation->OnDragScreenPositionUpdated.RemoveDynamic(this, &ATopDownController::HandleItemDragScreenPositionUpdated);
@@ -691,29 +752,77 @@ void ATopDownController::BeginItemDrag(const FStruct_TFTItemInstance& DraggedIte
 	}
 }
 
-void ATopDownController::EndItemDrag(bool bDroppedSuccessfully)
+
+void ATopDownController::HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition)
 {
-	if (!bIsDraggingItem)
+	FVector2D PixelPosition;
+	FVector2D ViewportPosition;
+
+	USlateBlueprintLibrary::AbsoluteToViewport(
+		this,
+		ScreenPosition,
+		PixelPosition,
+		ViewportPosition
+	);
+
+	LastKnownItemDragScreenPosition = PixelPosition;
+}
+
+ATFT_UnitCharacter* ATopDownController::FindItemDropTargetAtScreenPosition(const FVector2D& ScreenPosition) const
+{
+	if (ScreenPosition.IsNearlyZero())
 	{
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("FindItemDropTargetAtScreenPosition - ScreenPosition is zero"));
+		return nullptr;
 	}
 
-	if (bDroppedSuccessfully && CurrentItemDropTargetUnit && ItemInventoryComponent)
+	FVector WorldLocation;
+	FVector WorldDirection;
+
+	if (!DeprojectScreenPositionToWorld(ScreenPosition.X, ScreenPosition.Y, WorldLocation, WorldDirection))
 	{
-		const bool bEquipSuccess = CurrentItemDropTargetUnit->TryEquipItem(CurrentDraggedItem);
-		if (bEquipSuccess)
+		UE_LOG(LogTemp, Warning, TEXT("Deproject failed"));
+		return nullptr;
+	}
+
+	const FVector TraceStart = WorldLocation;
+	const FVector TraceEnd = TraceStart + (WorldDirection * 100000.0f);
+
+	if (!GetWorld())
+	{
+		return nullptr;
+	}
+
+	// DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Red, false, 3.0f, 0, 2.0f);
+	// DrawDebugSphere(GetWorld(), TraceEnd, 40.0f, 12, FColor::Blue, false, 3.0f);
+
+	TArray<FHitResult> HitResults;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ItemDropTrace), false);
+
+	const bool bHit = GetWorld()->LineTraceMultiByChannel(
+		HitResults,
+		TraceStart,
+		TraceEnd,
+		ECC_Visibility,
+		QueryParams
+	);
+
+	if (!bHit)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Trace hit nothing"));
+		return nullptr;
+	}
+
+	for (const FHitResult& HitResult : HitResults)
+	{
+
+		if (ATFT_UnitCharacter* HitUnit = Cast<ATFT_UnitCharacter>(HitResult.GetActor()))
 		{
-			ItemInventoryComponent->RemoveItemByInstanceId(CurrentDraggedItem.InstanceId);
-			ItemInventoryComponent->NotifyInventoryUpdated();
+			if (!HitUnit->bIsEnemy)
+			{
+				return HitUnit;
+			}
 		}
 	}
-
-	bIsDraggingItem = false;
-	CurrentDraggedItem = FStruct_TFTItemInstance{};
-	CurrentItemDropTargetUnit = nullptr;
-	
-	if (ItemDragLayerWidget)
-	{
-		ItemDragLayerWidget->SetVisibility(ESlateVisibility::Collapsed);
-	}
+	return nullptr;
 }

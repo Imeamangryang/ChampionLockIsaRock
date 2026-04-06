@@ -8,6 +8,7 @@
 #include "SHIN/Struct/FTFT_ChampionData.h"
 #include "Dong/Public/BenchManager.h"
 #include "Dong/Public/GirdManager.h"
+#include "Dong/Public/TFTStageManager.h"
 #include "Dong/Public/TopDownController.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -30,7 +31,7 @@ void AUnitManager::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
     
-    if (bIsEvolving && MainUnit_Ptr && Fodder1_Ptr && Fodder2_Ptr)
+    if (bIsEvolving && IsValid(MainUnit_Ptr) && IsValid(Fodder1_Ptr) && IsValid(Fodder2_Ptr))
     {
         EvolutionAlpha += DeltaTime * EvolutionSpeed;
         FVector TargetLoc = MainUnit_Ptr->GetActorLocation();
@@ -49,7 +50,7 @@ void AUnitManager::Tick(float DeltaTime)
  
 void AUnitManager::TryUpgradeUnit(ETFT_ChampionKey UnitKey, int32 StarLevel)
 {
-    if (StarLevel >= 3 || bIsEvolving) return; // 이미 합체 중이면 중복 방지
+    if (StarLevel >= 3) return; // 이미 합체 중이면 중복 방지
 
     TArray<ATFT_UnitCharacter*> FoundUnits;
     for (TActorIterator<ATFT_UnitCharacter> It(GetWorld()); It; ++It)
@@ -68,6 +69,7 @@ void AUnitManager::TryUpgradeUnit(ETFT_ChampionKey UnitKey, int32 StarLevel)
 
         // 메인 기물 우선순위 결정 (필드 > 대기석 왼쪽)
         ATFT_UnitCharacter* MainUnit = nullptr;
+        
         for (ATFT_UnitCharacter* Unit : FoundUnits) {
             if (!PC->IsUnitOnBench(Unit)) { MainUnit = Unit; break; }
         }
@@ -79,10 +81,30 @@ void AUnitManager::TryUpgradeUnit(ETFT_ChampionKey UnitKey, int32 StarLevel)
             }
         }
         if (!MainUnit) MainUnit = FoundUnits[0];
+        
+        ATFTStageManager* StageManager = Cast<ATFTStageManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ATFTStageManager::StaticClass()));
+        if (StageManager && StageManager->bIsCombatActive)
+        {
+            // 메인 유닛이 필드에 있다면(대기석이 아니라면) 합체를 취소하고 보류 플래그를 켭니다.
+            if (MainUnit && !MainUnit->bIsBenched)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("전투 중 메모장에 적어두고 합체를 미룸."));
+                PC->PendingUpgradeKeys.AddUnique(UnitKey); // 메모장에 적기
+                return;
+            }
+        }
+        
+        if (bIsEvolving)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("매니저가 바빠서 대기열에 넣습니다."));
+            PC->PendingUpgradeKeys.AddUnique(UnitKey);
+            return;
+        }
 
         // 재료 분류
         TArray<ATFT_UnitCharacter*> Fodders;
-        for (ATFT_UnitCharacter* Unit : FoundUnits) {
+        for (ATFT_UnitCharacter* Unit : FoundUnits) 
+        {
             if (Unit != MainUnit) Fodders.Add(Unit);
         }
 
@@ -141,11 +163,15 @@ void AUnitManager::FinishUpgrade(ATFT_UnitCharacter* TargetUnit, ATFT_UnitCharac
             }
         }
     }
-
+ 
     // 블루프린트에 이펙트 터뜨리라고 신호 보내기
     BP_OnFusionComplete(TargetUnit);
 
     // 연쇄 합체 체크 (2성 3개가 모여 3성이 되는 경우)
     TryUpgradeUnit(UnitKey, NewStarLevel);
+    if (PC)
+    {
+        PC->ProcessPendingUpgrades();
+    }
 }
 

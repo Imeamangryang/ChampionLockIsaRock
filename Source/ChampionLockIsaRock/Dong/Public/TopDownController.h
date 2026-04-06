@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "SHIN/Struct/ETFT_ChampionList.h"
 #include "SHIN/Struct/TFT_ItemTypes.h"
 #include "TopDownController.generated.h"
 
@@ -163,7 +164,19 @@ public:
     
     UPROPERTY(BlueprintAssignable, Category = "TFT|Events")
     FOnUnitCountChangedSignature OnUnitCountChanged;
-
+    
+    // 전투 중 합체가 보류되었는지
+    UPROPERTY(BlueprintReadWrite, Category = "TFT|Evolution")
+    bool bHasPendingUpgrades = false;
+    
+    // 전투 중에 합체를 미뤄둔 챔피언들의 적어두는 메모장
+    UPROPERTY()
+    TArray<ETFT_ChampionKey> PendingUpgradeKeys;
+    
+    // 준비 시간이 되면 보류된 기물을 합치는 함수
+    UFUNCTION()
+    void ProcessPendingUpgrades();
+    
     // 유닛 카운트
     UFUNCTION(BlueprintCallable, Category = "TFT|Logic")
     void BroadcastUnitCount();
@@ -176,22 +189,23 @@ protected:
     UPROPERTY(EditAnywhere, Category = "TFT|Spawn")
     TSubclassOf<class ATFT_UnitCharacter> UnitClass;
     
-    
     // ========= 준섭이꺼 =========
 public:
     
     // Inventory Component
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     class UTFT_ItemInventoryComponent* ItemInventoryComponent;
-    
-    UFUNCTION()
-    void HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition);
 
     UFUNCTION(BlueprintCallable)
     void BeginItemDrag(const FStruct_TFTItemInstance& DraggedItem, UTFT_ItemDragDropOperation* DragOperation);
 
     UFUNCTION(BlueprintCallable)
     void EndItemDrag(bool bDroppedSuccessfully);
+    
+    ATFT_UnitCharacter* FindItemDropTargetAtScreenPosition(const FVector2D& ScreenPosition) const;
+    
+    UFUNCTION()
+    void HandleItemDragScreenPositionUpdated(FVector2D ScreenPosition);
 
 protected:
     UPROPERTY()
@@ -208,4 +222,8 @@ protected:
 
     UPROPERTY()
     UTFT_ItemDragLayerWidget* ItemDragLayerWidget = nullptr;
+    
+    UPROPERTY()
+    FVector2D LastKnownItemDragScreenPosition = FVector2D::ZeroVector;
+    
 };

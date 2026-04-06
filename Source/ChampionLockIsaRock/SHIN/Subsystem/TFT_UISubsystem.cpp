@@ -2,9 +2,10 @@
 #include "SHIN/Character/TFT_UnitCharacter.h"
 #include "SHIN/Struct/FStruct_TFT_Champion.h"
 
-void UTFT_UISubsystem::BroadcastStatUIOpen(bool bIsOpen, FStruct_TFT_Champion championdata, ATFT_UnitCharacter* Unit)
+
+void UTFT_UISubsystem::BroadcastStatUIOpen(bool bIsOpen, ATFT_UnitCharacter* Unit)
 {
-	OnStatUIOpen.Broadcast(bIsOpen, championdata, Unit);
+	OnStatUIOpen.Broadcast(bIsOpen, Unit);
 }
 
 void UTFT_UISubsystem::BroadcastHPUpdate(ATFT_UnitCharacter* Unit, float MaxHP, float CurrentHP)
