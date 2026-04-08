@@ -197,7 +197,7 @@ void UTFT_HPBarWidget::RefreshItemSlots()
 		if (SlotData.bOccupied)
 		{
 			++EquippedCount;
-			SlotBorder->SetBrushColor(FLinearColor(0.95f, 0.8f, 0.2f, 1.0f));
+			SlotBorder->SetBrushColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.0f));
 
 			if (UTexture2D* ItemIcon = OwnerCharacter->GetItemIconByItemId(SlotData.ItemInstance.ItemId))
 			{

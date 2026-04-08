@@ -113,6 +113,12 @@ FTFTDamageResult UTFT_StatComponent::ApplyDamage(int32 Damage, ATFT_UnitCharacte
 	if (ATFT_UnitCharacter* OwnerCharacter = Cast<ATFT_UnitCharacter>(GetOwner()))
 	{
 		OwnerCharacter->UpdateHPBarWidget();
+		
+		// 피격 대상도 마나 5 획득
+		if (Result.FinalDamage > 0)
+		{
+			AddMana(5);
+		}
 	}
 	
 	if (Result.bKilledTarget)

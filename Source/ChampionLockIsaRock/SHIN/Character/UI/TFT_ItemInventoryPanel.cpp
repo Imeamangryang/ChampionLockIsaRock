@@ -15,13 +15,12 @@ void UTFT_ItemInventoryPanel::NativeConstruct()
 		UISubsystem->OnItemInventoryUpdated.AddDynamic(this, &UTFT_ItemInventoryPanel::HandleInventoryUpdated);
 	}
 	
-	// // Test Code
-	TArray<FStruct_TFTItemInstance> TestItems;
-	FStruct_TFTItemInstance Item1;
-	Item1.ItemId = TEXT("LordsEdge");
-	TestItems.Add(Item1);
-	
-	RefreshInventory(TestItems);
+	// Test Code
+	// TArray<FStruct_TFTItemInstance> TestItems;
+	// FStruct_TFTItemInstance Item1;
+	// Item1.ItemId = TEXT("LordsEdge");
+	// TestItems.Add(Item1);
+	// RefreshInventory(TestItems);
 }
 
 UTFT_ItemInventoryPanel::UTFT_ItemInventoryPanel(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)

@@ -110,11 +110,6 @@ void FCastingSkillState::Enter(UTFT_CombatComponent* Combat)
 
 void FCastingSkillState::Tick(UTFT_CombatComponent* Combat, float DeltaTime)
 {
-    // 스킬 캐스팅(애니메이션 등)이 완료되면 다시 검색으로
-    if (!Combat->IsCasting())
-    {
-        Combat->ChangeState(Combat->GetSearchingState(), ECombatState::Searching);
-    }
 }
 
 void FDeadState::Enter(UTFT_CombatComponent* Combat)

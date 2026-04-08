@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SHIN/Struct/ETFT_ChampionList.h"
+#include "SHIN/Struct/ETFT_ItemList.h"
 #include "TFTStageManager.generated.h"
  
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStagePreparationStartedSignature);
@@ -27,6 +28,9 @@ struct FEnemySpawnInfo
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (MakeEditWidget = true))
 	FVector EnemySpawnLocations;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<ETFT_ItemKey> EquippedItems;
 };
 // 스테이지 전체 데이터
 USTRUCT(BlueprintType)
@@ -148,5 +152,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "UI")
 	int32 GetRemainingRoundTimeInt() const;
 	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stage|Reward")
+	class UTFT_ItemRewardSpawnerComponent* ItemRewardSpawnerComponent;
 };
 

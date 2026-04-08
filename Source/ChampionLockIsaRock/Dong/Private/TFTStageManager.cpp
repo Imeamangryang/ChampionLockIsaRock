@@ -9,6 +9,7 @@
 #include "SHIN/Character/Components/TFT_StatComponent.h"
 #include "Dong/Public/GirdManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "SHIN/Actors/Components/TFT_ItemRewardSpawnerComponent.h"
 
 
 // Sets default values
@@ -16,6 +17,8 @@ ATFTStageManager::ATFTStageManager()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
+	ItemRewardSpawnerComponent = CreateDefaultSubobject<UTFT_ItemRewardSpawnerComponent>(TEXT("ItemRewardSpawnerComponent"));
 }
 
 // Called when the game starts or when spawned
@@ -187,7 +190,18 @@ void ATFTStageManager::SetupStage(int32 Index)
 			NewEnemy->bIsBenched = false; 
 
 			NewEnemy->InitWithChampionKey(Info.ChampionKey, Info.StarLevel);
-        
+			
+			
+			const int32 MaxItemsToEquip = FMath::Min(Info.EquippedItems.Num(), 3);
+			for (int32 i = 0; i < MaxItemsToEquip; ++i)
+			{
+				FStruct_TFTItemInstance ItemInstance;
+				FString EnumName = StaticEnum<ETFT_ItemKey>()->GetNameStringByValue((int64)Info.EquippedItems[i]);
+				ItemInstance.ItemId = FName(*EnumName);
+
+				NewEnemy->TryEquipItem(ItemInstance);
+			}
+			
 			// 소환된 적을 전투 명단(Active)뿐만 아니라 '전체 명단(Spawned)'에도 넣습니다.
 			ActiveEnemyUnits.Add(NewEnemy);
 			SpawnedEnemies.Add(NewEnemy);
@@ -198,6 +212,9 @@ void ATFTStageManager::SetupStage(int32 Index)
 	{
 		StageHistory[Index] = EStageStatus::Current;
 	}
+	
+	// 보상 지급	
+	ItemRewardSpawnerComponent->SpawnStageItemRewards(Index);
 }
 
 // 1. 유닛이 죽었을 때 실행될 로직

@@ -33,7 +33,14 @@ public:
 	void EndCombat();
 	
 	UFUNCTION()
-	void OnAttackHitNotify();
+	void OnAttackHitNotify() const;
+	
+	UFUNCTION()
+	void OnSkillCastNotify();
+
+	void HandleSelfAreaSkill();
+	void HandleProjectileSkill();
+	void HandleTargetAreaSkill();
 
 protected:
 	virtual void BeginPlay() override;
@@ -64,16 +71,15 @@ public:
 	void FindTarget();
 	bool HasTarget() const;
 	bool IsTargetInRange() const;
-	void MoveToTarget();
-	void AttackTarget();
+	void MoveToTarget() const;
+	void AttackTarget() const;
 	void CastSkill();
 	bool IsManaFull() const;
-	void Dead();
+	void Dead() const;
     
 	// 추가로 필요한 헬퍼 함수들
-	bool IsCasting() const;
 	void ResetAttackTimer();
-	void StopAllActions();
+	void StopAllActions() const;
 	
 	UFUNCTION()
 	void HandleReturnAllUnitsHome();

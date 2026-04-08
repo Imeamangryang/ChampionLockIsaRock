@@ -37,8 +37,23 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 		UE_LOG(LogTemp, Warning, TEXT("Failed to load HP Bar Widget class."));
 	}
 	
-	// Pawn끼리는 콜리전 무시
-	GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (Capsule)
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Capsule->SetCollisionObjectType(ECC_Pawn);
+		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Capsule->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // 기본은 대기 상태 기준
+	}
+	
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		MeshComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		MeshComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
 }
 
 void ATFT_UnitCharacter::BeginPlay()
@@ -180,6 +195,16 @@ void ATFT_UnitCharacter::InitializeMesh()
 	if (TempMontage)
 	{
 		DanceMontage = TempMontage;
+	}
+	
+	// SkillMontage
+	FString SkillMontagePath = FString::Printf(
+	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Skill_Montage.Skill_Montage"), *Name);
+	
+	TempMontage = LoadObject<UAnimMontage>(nullptr, *SkillMontagePath);
+	if (TempMontage)
+	{
+		SkillMontage = TempMontage;
 	}
 }
 
@@ -394,6 +419,18 @@ void ATFT_UnitCharacter::PlayDanceMontage()
 	
 	// 몽타주 수동으로 멈출때까지 반복 재생하도록 설정
 	AnimInstance->Montage_Play(DanceMontage, 1.f, EMontagePlayReturnType::MontageLength, 0.f, true);
+}
+
+void ATFT_UnitCharacter::PlaySkillMontage()
+{
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
+		return;
+	}
+	
+	AnimInstance->Montage_Play(SkillMontage);
 }
 
 void ATFT_UnitCharacter::InitializeItemSlots()

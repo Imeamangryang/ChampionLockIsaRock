@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "SHIN/Struct/FTFT_ChampionData.h"
+#include "SHIN/Struct/ETFT_ChampionList.h"
 #include "TFTPieceSlotWidget.generated.h"
 
 class UTextBlock;
@@ -15,11 +16,11 @@ class CHAMPIONLOCKISAROCK_API UTFTPieceSlotWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
-    // 챔피언 데이터 세팅 (TFTShopWidget에서 호출)
+    virtual void NativeConstruct() override;
+
     UFUNCTION(BlueprintCallable, Category = "TFT|Shop")
     void SetChampionData(const FTFT_ChampionData& Data);
 
-    // 슬롯 비우기
     UFUNCTION(BlueprintCallable, Category = "TFT|Shop")
     void ClearSlot();
 
@@ -38,4 +39,14 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UTextBlock> TextBlock_Cost;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    TObjectPtr<UButton> Button;
+
+private:
+    ETFT_ChampionKey CurrentChampionKey;
+    int32 CurrentCost = 1;
+
+    UFUNCTION()
+    void OnSlotClicked();
 };

@@ -28,6 +28,8 @@ public:
 	
 	void PlayDanceMontage();
 	
+	void PlaySkillMontage();
+	
 	void StopMontage(float BlendOutTime = 0.15f);
 	
 	void UpdateHPBarWidget();
@@ -116,6 +118,9 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	class UAnimMontage* DanceMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	class UAnimMontage* SkillMontage;
 	
 	
 	// Enemy 여부 (적이면 true, 아군이면 false)

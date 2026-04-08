@@ -7,9 +7,10 @@
 #include "SHIN/GameFramework/TFT_GameInstance.h"
 #include "SHIN/Struct/FTFT_ChampionData.h"
 #include "Engine/DataTable.h"
+#include "Math/RandomStream.h"
 
-// 레벨별 티어(Cost) 확률 테이블 [레벨-1][Cost 1~5]
-static const float ROLL_ODDS[10][5] = {
+// 레벨별 코스트 확률 테이블
+static const float SHOP_ROLL_ODDS[10][5] = {
     { 1.00f, 0.00f, 0.00f, 0.00f, 0.00f }, // Lv1
     { 1.00f, 0.00f, 0.00f, 0.00f, 0.00f }, // Lv2
     { 0.75f, 0.25f, 0.00f, 0.00f, 0.00f }, // Lv3
@@ -22,7 +23,6 @@ static const float ROLL_ODDS[10][5] = {
     { 0.05f, 0.10f, 0.20f, 0.40f, 0.25f }, // Lv10
 };
 
-// 레벨 기반으로 Cost 1~5 중 하나 랜덤 선택
 static int32 RollCostByLevel(int32 Level, FRandomStream& Stream)
 {
     int32 Idx = FMath::Clamp(Level - 1, 0, 9);
@@ -30,7 +30,7 @@ static int32 RollCostByLevel(int32 Level, FRandomStream& Stream)
     float Cumulative = 0.f;
     for (int32 i = 0; i < 5; i++)
     {
-        Cumulative += ROLL_ODDS[Idx][i];
+        Cumulative += SHOP_ROLL_ODDS[Idx][i];
         if (Roll < Cumulative) return i + 1;
     }
     return 1;
@@ -73,15 +73,12 @@ void UTFTShopWidget::NativeDestruct()
 
 void UTFTShopWidget::RollShop()
 {
-    FRandomStream Stream;
-    Stream.GenerateNewSeed();
     UTFT_GameInstance* GI = Cast<UTFT_GameInstance>(GetGameInstance());
     if (!GI) return;
 
     UDataTable* DT = GI->ChampionDataTable.LoadSynchronous();
     if (!DT) return;
 
-    // 현재 레벨 가져오기
     int32 CurrentLevel = 1;
     if (APlayerController* PC = GetOwningPlayer())
     {
@@ -91,33 +88,40 @@ void UTFTShopWidget::RollShop()
         }
     }
 
-    // 전체 행에서 Cost별로 분류
     TArray<FTFT_ChampionData*> AllRows;
     DT->GetAllRows<FTFT_ChampionData>(TEXT("RollShop"), AllRows);
     if (AllRows.Num() == 0) return;
 
-    TArray<FTFT_ChampionData*> ByTier[5]; // ByTier[0] = Cost1, ..., ByTier[4] = Cost5
+    // 코스트별로 분류
+    TArray<FTFT_ChampionData*> ByTier[5];
     for (FTFT_ChampionData* Row : AllRows)
     {
         int32 TierIdx = FMath::Clamp(Row->Cost - 1, 0, 4);
         ByTier[TierIdx].Add(Row);
     }
 
-    // 슬롯 배열
+    // 매번 새로운 시드로 랜덤 스트림 생성
+    FRandomStream Stream;
+    Stream.GenerateNewSeed();
+
     TArray<UTFTPieceSlotWidget*> Slots = {
         WBP_PieceSlot, WBP_PieceSlot_1, WBP_PieceSlot_2,
         WBP_PieceSlot_3, WBP_PieceSlot_4
     };
 
+    // 먼저 모든 슬롯 보이게
+    for (UTFTPieceSlotWidget* PieceSlot : Slots)
+    {
+        if (PieceSlot) PieceSlot->SetVisibility(ESlateVisibility::Visible);
+    }
+
     for (UTFTPieceSlotWidget* PieceSlot : Slots)
     {
         if (!PieceSlot) continue;
 
-        // 레벨 기반 Cost 결정
         int32 Cost = RollCostByLevel(CurrentLevel, Stream);
         int32 TierIdx = Cost - 1;
 
-        // 해당 티어에 챔피언이 없으면 Cost1으로 fallback
         if (ByTier[TierIdx].Num() == 0) TierIdx = 0;
         if (ByTier[TierIdx].Num() == 0) continue;
 
@@ -140,7 +144,6 @@ UTFT_UISubsystem* UTFTShopWidget::GetUISubsystem() const
 
 void UTFTShopWidget::OnGoldChanged(int32 NewGold)
 {
-    UE_LOG(LogTemp, Warning, TEXT("=== OnGoldChanged: %d ==="), NewGold);
     if (txt_Gold)
     {
         txt_Gold->SetText(FText::FromString(FString::Printf(TEXT("%d"), NewGold)));
