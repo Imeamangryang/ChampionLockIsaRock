@@ -10,8 +10,7 @@
 			"LoadingPhase": "Default",
 			"AdditionalDependencies": [
 				"CoreUObject",
-				"Engine",
-				"DataValidation"
+				"Engine"
 			]
 		}
 	],
