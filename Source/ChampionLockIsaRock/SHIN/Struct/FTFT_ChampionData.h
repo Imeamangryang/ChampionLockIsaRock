@@ -79,6 +79,8 @@ struct FTFT_ChampionData : public FTableRowBase
 	FString SkillStats; 
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TSoftObjectPtr<UTexture2D> SkillImage;
+	TSoftObjectPtr<UTexture2D> SkillImage; 
 	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<class UNiagaraSystem> SkillEffect; 
 };

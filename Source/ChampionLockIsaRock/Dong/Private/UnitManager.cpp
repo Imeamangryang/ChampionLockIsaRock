@@ -146,6 +146,12 @@ void AUnitManager::FinishUpgrade(ATFT_UnitCharacter* TargetUnit, ATFT_UnitCharac
         PC->UnitHomeRegistry.Remove(F2);
     }
     
+    if (PC)
+    {
+        PC->ReturnUnitEquippedItemsToInventory(F1);
+        PC->ReturnUnitEquippedItemsToInventory(F2);
+    }
+     
     F1->Destroy();
     F2->Destroy();
 
@@ -165,7 +171,7 @@ void AUnitManager::FinishUpgrade(ATFT_UnitCharacter* TargetUnit, ATFT_UnitCharac
     }
  
     // 블루프린트에 이펙트 터뜨리라고 신호 보내기
-    BP_OnFusionComplete(TargetUnit);
+    BP_OnFusionComplete(TargetUnit, NewStarLevel);
 
     // 연쇄 합체 체크 (2성 3개가 모여 3성이 되는 경우)
     TryUpgradeUnit(UnitKey, NewStarLevel);

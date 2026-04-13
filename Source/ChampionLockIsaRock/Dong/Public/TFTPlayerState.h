@@ -29,6 +29,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TFT|Level")
 	int32 MaxXP;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sounds")
+	class USoundBase* SoundLevelUp;
+	
 	// --- 외부 호출용 함수 ---
 	UFUNCTION(BlueprintCallable, Category = "TFT|Logic")
 	void AddGold(int32 Amount);

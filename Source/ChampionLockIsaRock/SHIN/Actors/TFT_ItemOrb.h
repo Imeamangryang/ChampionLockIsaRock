@@ -42,6 +42,12 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UStaticMeshComponent* OrbMesh;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TFT|Coin")
+	UNiagaraComponent* OrbEffect;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|Audio")
+	class USoundBase* OrbSound = nullptr;
 
 	// 어떤 아이템을 주는 오브인지
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TFT|ItemOrb")
@@ -62,7 +68,7 @@ public:
 	float ArcHeight = 450.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|ItemOrb|SpawnArc")
-	float MoveDuration = 1.5f;
+	float MoveDuration = 1.0f;
 	
 	UPROPERTY()
 	FVector StartLocation = FVector::ZeroVector;

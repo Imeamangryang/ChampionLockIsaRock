@@ -92,6 +92,12 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sounds")
+	class USoundBase* SoundRoundEndVictory;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sounds")
+	class USoundBase* SoundStageTransition;
+	
 	// 필드 조작이 제한되는 상태인지 확인 (전투 중이거나 정산 중일 때 true 반환)
 	UFUNCTION(BlueprintPure, Category = "Stage")
 	bool IsBoardLocked() const;
@@ -118,6 +124,10 @@ public:
 
 	UFUNCTION()
 	void OnUnitDied(class ATFT_UnitCharacter* DeadUnit);
+	
+	// 엔딩 시네마틱을 재생하라고 블루프린트에게 알리는 이벤트
+	UFUNCTION(BlueprintImplementableEvent, Category = "Cinematic")
+	void BP_PlayEndingCinematic();
 
 private:
 	void SetupStage(int32 Index);

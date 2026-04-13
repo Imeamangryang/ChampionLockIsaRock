@@ -34,7 +34,7 @@ protected:
 
 	// [이펙트용] 나중에 파티클 터뜨릴 때 사용
 	UFUNCTION(BlueprintImplementableEvent, Category = "TFT|Evolution")
-	void BP_OnFusionComplete(ATFT_UnitCharacter* FinalUnit);
+	void BP_OnFusionComplete(ATFT_UnitCharacter* TargetUnit, int32 StarLevel);
  
 private:
 	// 매니저 참조
@@ -55,4 +55,4 @@ private:
 	FVector F2_StartLoc;
 	ETFT_ChampionKey PendingKey;
 	int32 PendingLevel;
-};
+}; 

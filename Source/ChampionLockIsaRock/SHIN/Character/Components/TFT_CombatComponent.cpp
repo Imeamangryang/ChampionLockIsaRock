@@ -10,19 +10,14 @@
 #include "Kismet/GameplayStatics.h"
 #include "SHIN/Actors/TFT_DamageTextActor.h"
 #include "SHIN/Actors/TFT_SkillProjectile.h"
+#include "NiagaraSystem.h"
 
 UTFT_CombatComponent::UTFT_CombatComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	OwnerCharacter = Cast<ATFT_UnitCharacter>(GetOwner());
 
-	if (!OwnerCharacter)
-	{
-		UE_LOG(LogTemp, Error, TEXT("UTFT_CombatComponent: Owner is not ATFT_UnitCharacter."));
-		return;
-	}
+	OwnerCharacter = nullptr;
 
-	// TODO: 나중에는 StatComponent 또는 ChampionData에서 가져오도록 변경
 	AttackRange = 150.f;
 	AttackRate = 1.0f;
 	CurrentAttackTimer = AttackRate;
@@ -30,11 +25,6 @@ UTFT_CombatComponent::UTFT_CombatComponent()
 	CurrentTarget = nullptr;
 	CurrentState = ECombatState::Idle;
 	CurrentStatePtr = &IdleState;
-
-	UE_LOG(LogTemp, Log, TEXT("CombatComponent initialized for %s | Range: %.1f | Interval: %.2f"),
-		*OwnerCharacter->GetName(),
-		AttackRange,
-		AttackRate);
 }
 
 void UTFT_CombatComponent::StartCombat()
@@ -137,6 +127,15 @@ void UTFT_CombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	
+	if (OwnerCharacter && OwnerCharacter->StatComponent)
+	{
+		if (OwnerCharacter->StatComponent->Health <= 0 && CurrentState != ECombatState::Dead)
+		{
+			ChangeState(GetDeadState(), ECombatState::Dead);
+			return;
+		}
+	}
+	
 	// 전투 시작 시 캐릭터가 바라보는 방향을 뒤집어서 시작(180도 회전)
 	if (bRotateToCombatStart && OwnerCharacter)
 	{
@@ -157,7 +156,6 @@ void UTFT_CombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		}
 	}
 	
-	// State Tick
 	if (CurrentStatePtr)
 	{
 		CurrentStatePtr->Tick(this, DeltaTime);
@@ -558,7 +556,7 @@ void UTFT_CombatComponent::OnAttackHitNotify() const
 	{
 		return;
 	}
-	
+
 	const float Distance = FVector::Dist(
 		OwnerCharacter->GetActorLocation(),
 		CurrentTarget->GetActorLocation()
@@ -580,11 +578,31 @@ void UTFT_CombatComponent::OnAttackHitNotify() const
 		return;
 	}
 
+	const bool bUseProjectileAttack =
+		OwnerCharacter->StatComponent &&
+		OwnerCharacter->StatComponent->AttackRange >= 2;
+
+	if (bUseProjectileAttack)
+	{
+		SpawnBasicAttackProjectile(Damage);
+
+		if (OwnerCharacter->StatComponent)
+		{
+			OwnerCharacter->StatComponent->AddMana(10);
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("%s spawned basic attack projectile toward %s"),
+			*OwnerCharacter->GetChampionNameString(),
+			*CurrentTarget->GetChampionNameString());
+
+		return;
+	}
+
 	const FTFTDamageResult DamageResult = CurrentTarget->StatComponent->ApplyDamage(Damage, OwnerCharacter);
 
 	if (DamageResult.FinalDamage > 0)
 	{
-		const FVector SpawnLocation = CurrentTarget->GetActorLocation(); // + FVector(0.f, 0.f, 150.f);
+		const FVector SpawnLocation = CurrentTarget->GetActorLocation();
 
 		if (UWorld* World = GetWorld())
 		{
@@ -599,6 +617,11 @@ void UTFT_CombatComponent::OnAttackHitNotify() const
 				DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
 			}
 		}
+	}
+
+	if (DamageResult.bIsCritical)
+	{
+		UGameplayStatics::PlaySound2D(this, OwnerCharacter->AttackSound);
 	}
 
 	if (OwnerCharacter->StatComponent)
@@ -620,19 +643,26 @@ void UTFT_CombatComponent::OnSkillCastNotify()
 	{
 		return;
 	}
+	
+	UE_LOG(LogTemp, Log, TEXT("%s is casting skill: %s"),
+		*OwnerCharacter->GetChampionNameString(),
+		*OwnerCharacter->SkillComponent->SkillName.ToString());
 
 	const FString SkillType = OwnerCharacter->SkillComponent->Type.ToString();
 
 	if (SkillType == TEXT("SelfArea"))
 	{
+		UE_LOG(LogTemp, Log, TEXT("%s is handling SelfArea skill."), *OwnerCharacter->GetChampionNameString());
 		HandleSelfAreaSkill();
 	}
 	else if (SkillType == TEXT("Projectile"))
 	{
+		UE_LOG(LogTemp, Log, TEXT("%s is handling Projectile skill."), *OwnerCharacter->GetChampionNameString());
 		HandleProjectileSkill();
 	}
 	else if (SkillType == TEXT("TargetArea"))
 	{
+		UE_LOG(LogTemp, Log, TEXT("%s is handling TargetArea skill."), *OwnerCharacter->GetChampionNameString());
 		HandleTargetAreaSkill();
 	}
 	else
@@ -645,100 +675,39 @@ void UTFT_CombatComponent::OnSkillCastNotify()
 
 void UTFT_CombatComponent::HandleSelfAreaSkill()
 {
-	if (!OwnerCharacter || !OwnerCharacter->StatComponent || !GetWorld())
+	if (!OwnerCharacter || !OwnerCharacter->StatComponent || !OwnerCharacter->SkillComponent || !GetWorld())
 	{
 		return;
 	}
-	
-	// 1) 현재 별 레벨에 맞는 스킬 데미지 가져오기
+
+	if (!HasTarget())
+	{
+		return;
+	}
+
 	const int32 StarIndex = FMath::Clamp(OwnerCharacter->starLevel - 1, 0, 2);
 	const TArray<float>& SkillValues = OwnerCharacter->SkillComponent->SkillValues;
 
 	if (!SkillValues.IsValidIndex(StarIndex))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%s has invalid SkillValues index for star level %d"),
-			*OwnerCharacter->GetChampionNameString(),
-			OwnerCharacter->starLevel);
 		return;
 	}
 
-	const int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
-	if (SkillDamage <= 0)
+	int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
+	SkillDamage = SkillDamage + OwnerCharacter->StatComponent->AbilityPower;
+
+	const FTFTDamageResult DamageResult = CurrentTarget->StatComponent->ApplyDamage(SkillDamage, OwnerCharacter);
+
+	if (DamageResult.FinalDamage > 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%s SelfArea skill damage is invalid: %d"),
-			*OwnerCharacter->GetChampionNameString(),
-			SkillDamage);
-		return;
-	}
-
-	// 2) 스킬 중심점 / 반경
-	const FVector SkillCenter = OwnerCharacter->GetActorLocation();
-	const float SkillRadius = 250.f; // TODO: 나중에 스킬 데이터로 분리
-
-	int32 HitCount = 0;
-
-	// 3) 범위 내 적 유닛 탐색
-	for (TActorIterator<ATFT_UnitCharacter> It(GetWorld()); It; ++It)
-	{
-		ATFT_UnitCharacter* TargetUnit = *It;
-		if (!IsValid(TargetUnit))
+		if (ATFT_DamageTextActor* DamageTextActor = GetWorld()->SpawnActor<ATFT_DamageTextActor>(
+			ATFT_DamageTextActor::StaticClass(),
+			CurrentTarget->GetActorLocation(),
+			FRotator::ZeroRotator))
 		{
-			continue;
-		}
-
-		if (TargetUnit == OwnerCharacter)
-		{
-			continue;
-		}
-
-		// 같은 팀 제외
-		if (TargetUnit->bIsEnemy == OwnerCharacter->bIsEnemy)
-		{
-			continue;
-		}
-
-		// 대기석 제외
-		if (TargetUnit->bIsBenched)
-		{
-			continue;
-		}
-
-		// 죽은 유닛 제외
-		if (!TargetUnit->StatComponent || TargetUnit->StatComponent->Health <= 0)
-		{
-			continue;
-		}
-
-		const float Distance = FVector::Dist(SkillCenter, TargetUnit->GetActorLocation());
-		if (Distance > SkillRadius)
-		{
-			continue;
-		}
-
-		// 4) 데미지 적용
-		const FTFTDamageResult DamageResult = TargetUnit->StatComponent->ApplyDamage(SkillDamage, OwnerCharacter);
-
-		if (DamageResult.FinalDamage > 0)
-		{
-			++HitCount;
-
-			const FVector SpawnLocation = TargetUnit->GetActorLocation();
-
-			if (ATFT_DamageTextActor* DamageTextActor = GetWorld()->SpawnActor<ATFT_DamageTextActor>(
-				ATFT_DamageTextActor::StaticClass(),
-				SpawnLocation,
-				FRotator::ZeroRotator))
-			{
-				DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
-			}
+			DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
 		}
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("%s cast SelfArea skill | Damage: %d | Radius: %.1f | HitCount: %d"),
-		*OwnerCharacter->GetChampionNameString(),
-		SkillDamage,
-		SkillRadius,
-		HitCount);
 }
 
 void UTFT_CombatComponent::HandleProjectileSkill()
@@ -774,7 +743,7 @@ void UTFT_CombatComponent::HandleProjectileSkill()
 		return;
 	}
 
-	const int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
+	int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
 	if (SkillDamage <= 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s Projectile skill damage is invalid: %d"),
@@ -782,9 +751,17 @@ void UTFT_CombatComponent::HandleProjectileSkill()
 			SkillDamage);
 		return;
 	}
+	SkillDamage = SkillDamage + OwnerCharacter->StatComponent->AbilityPower;
 
+	UNiagaraSystem* SkillEffect= OwnerCharacter->SkillComponent->SkillEffect;
+
+	if (!SkillEffect)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s SkillEffect is null"), *OwnerCharacter->GetChampionNameString());
+	}
+	
 	// 2) Projectile Class 체크
-	TSubclassOf<ATFT_SkillProjectile> ProjectileClass = ATFT_SkillProjectile::StaticClass(); // TODO: 나중에 스킬 데이터로 분리
+	TSubclassOf<ATFT_SkillProjectile> ProjectileClass = ATFT_SkillProjectile::StaticClass();
 	if (!ProjectileClass)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s has no ProjectileClass for projectile skill."),
@@ -795,7 +772,7 @@ void UTFT_CombatComponent::HandleProjectileSkill()
 	// 3) 스폰 위치/방향 계산
 	const FVector SpawnLocation =
 		OwnerCharacter->GetActorLocation() +
-		OwnerCharacter->GetActorForwardVector() * 80.f +
+		OwnerCharacter->GetActorForwardVector() * 50 +
 		FVector(0.f, 0.f, 100.f);
 
 	const FVector ToTarget = CurrentTarget->GetActorLocation() - SpawnLocation;
@@ -818,7 +795,7 @@ void UTFT_CombatComponent::HandleProjectileSkill()
 	}
 
 	// 5) 초기화
-	Projectile->InitializeProjectile(OwnerCharacter, CurrentTarget, SkillDamage);
+	Projectile->InitializeProjectile(OwnerCharacter, CurrentTarget, SkillDamage, SkillEffect);
 
 	UE_LOG(LogTemp, Log, TEXT("%s cast Projectile skill on %s | Damage: %d"),
 		*OwnerCharacter->GetChampionNameString(),
@@ -840,6 +817,13 @@ void UTFT_CombatComponent::HandleTargetAreaSkill()
 		return;
 	}
 
+	if (!OwnerCharacter->SkillComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s has no SkillComponent."),
+			*OwnerCharacter->GetChampionNameString());
+		return;
+	}
+
 	// 1) 별 레벨에 맞는 스킬 데미지 가져오기
 	const int32 StarIndex = FMath::Clamp(OwnerCharacter->starLevel - 1, 0, 2);
 	const TArray<float>& SkillValues = OwnerCharacter->SkillComponent->SkillValues;
@@ -852,7 +836,7 @@ void UTFT_CombatComponent::HandleTargetAreaSkill()
 		return;
 	}
 
-	const int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
+	int32 SkillDamage = FMath::RoundToInt(SkillValues[StarIndex]);
 	if (SkillDamage <= 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s TargetArea skill damage is invalid: %d"),
@@ -860,83 +844,81 @@ void UTFT_CombatComponent::HandleTargetAreaSkill()
 			SkillDamage);
 		return;
 	}
+	SkillDamage = SkillDamage + OwnerCharacter->StatComponent->AbilityPower;
 
-	// 2) 타겟 위치 기준 범위 설정
-	const FVector AreaCenter = CurrentTarget->GetActorLocation();
-	const float SkillRadius = 250.f; // TODO: 나중에 스킬 데이터로 분리
-
-	// 3) 공통 장판 나이아가라 이펙트 재생
-	// static const TCHAR* TargetAreaNiagaraPath = TEXT("/Game/SHIN/VFX/NS_TargetAreaCommon.NS_TargetAreaCommon");
-	// UNiagaraSystem* TargetAreaNiagara = LoadObject<UNiagaraSystem>(nullptr, TargetAreaNiagaraPath);
-	//
-	// if (TargetAreaNiagara)
-	// {
-	// 	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-	// 		GetWorld(),
-	// 		TargetAreaNiagara,
-	// 		AreaCenter,
-	// 		FRotator::ZeroRotator
-	// 	);
-	// }
-	// else
-	// {
-	// 	UE_LOG(LogTemp, Warning, TEXT("Failed to load target area Niagara: %s"), TargetAreaNiagaraPath);
-	// }
-
-	int32 HitCount = 0;
-
-	// 4) 범위 내 적 유닛 찾기
-	for (TActorIterator<ATFT_UnitCharacter> It(GetWorld()); It; ++It)
+	if (!CurrentTarget || !CurrentTarget->StatComponent || CurrentTarget->StatComponent->Health <= 0)
 	{
-		ATFT_UnitCharacter* TargetUnit = *It;
-		if (!IsValid(TargetUnit))
+		UE_LOG(LogTemp, Warning, TEXT("%s TargetArea skill failed: invalid current target."),
+			*OwnerCharacter->GetChampionNameString());
+		return;
+	}
+
+	// 2) 타겟 위치에 나이아가라 이펙트 재생
+	if (OwnerCharacter->SkillComponent->SkillEffect)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			GetWorld(),
+			OwnerCharacter->SkillComponent->SkillEffect,
+			CurrentTarget->GetActorLocation() + FVector(0, 0, 50),
+			FRotator::ZeroRotator
+		);
+	}
+
+	// 3) 현재 타겟 한 명에게만 데미지 적용
+	const FTFTDamageResult DamageResult = CurrentTarget->StatComponent->ApplyDamage(SkillDamage, OwnerCharacter);
+
+	if (DamageResult.FinalDamage > 0)
+	{
+		if (ATFT_DamageTextActor* DamageTextActor = GetWorld()->SpawnActor<ATFT_DamageTextActor>(
+			ATFT_DamageTextActor::StaticClass(),
+			CurrentTarget->GetActorLocation(),
+			FRotator::ZeroRotator))
 		{
-			continue;
-		}
-
-		if (TargetUnit->bIsEnemy == OwnerCharacter->bIsEnemy)
-		{
-			continue;
-		}
-
-		if (TargetUnit->bIsBenched)
-		{
-			continue;
-		}
-
-		if (!TargetUnit->StatComponent || TargetUnit->StatComponent->Health <= 0)
-		{
-			continue;
-		}
-
-		const float Distance = FVector::Dist(AreaCenter, TargetUnit->GetActorLocation());
-		if (Distance > SkillRadius)
-		{
-			continue;
-		}
-
-		const FTFTDamageResult DamageResult = TargetUnit->StatComponent->ApplyDamage(SkillDamage, OwnerCharacter);
-
-		if (DamageResult.FinalDamage > 0)
-		{
-			++HitCount;
-
-			if (ATFT_DamageTextActor* DamageTextActor = GetWorld()->SpawnActor<ATFT_DamageTextActor>(
-				ATFT_DamageTextActor::StaticClass(),
-				TargetUnit->GetActorLocation(),
-				FRotator::ZeroRotator))
-			{
-				DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
-			}
+			DamageTextActor->InitializeDamageText(DamageResult.FinalDamage, DamageResult.bIsCritical);
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("%s cast TargetArea skill at %s location | Damage: %d | Radius: %.1f | HitCount: %d"),
+	UE_LOG(LogTemp, Log, TEXT("%s cast TargetArea skill on %s | Damage: %d"),
 		*OwnerCharacter->GetChampionNameString(),
 		*CurrentTarget->GetChampionNameString(),
-		SkillDamage,
-		SkillRadius,
-		HitCount);
+		DamageResult.FinalDamage);
+}
+
+void UTFT_CombatComponent::SpawnBasicAttackProjectile(int32 Damage) const
+{
+	if (!OwnerCharacter || !CurrentTarget || !GetWorld())
+	{
+		return;
+	}
+
+	TSubclassOf<ATFT_SkillProjectile> ProjectileClass = ATFT_SkillProjectile::StaticClass();
+	if (!ProjectileClass)
+	{
+		return;
+	}
+
+	const FVector SpawnLocation =
+		OwnerCharacter->GetActorLocation() +
+		OwnerCharacter->GetActorForwardVector() * 80.f +
+		FVector(0.f, 0.f, 100.f);
+
+	const FVector ToTarget = CurrentTarget->GetActorLocation() - SpawnLocation;
+	const FRotator SpawnRotation = ToTarget.IsNearlyZero()
+		? OwnerCharacter->GetActorRotation()
+		: ToTarget.Rotation();
+
+	ATFT_SkillProjectile* Projectile = GetWorld()->SpawnActor<ATFT_SkillProjectile>(
+		ProjectileClass,
+		SpawnLocation,
+		SpawnRotation
+	);
+
+	if (!Projectile)
+	{
+		return;
+	}
+
+	Projectile->InitializeBasicProjectile(OwnerCharacter, CurrentTarget, Damage);
 }
 
 void UTFT_CombatComponent::CastSkill()
@@ -972,20 +954,30 @@ void UTFT_CombatComponent::CastSkill()
 		{
 			FTimerHandle SkillEndTimerHandle;
 			GetWorld()->GetTimerManager().SetTimer(
-				SkillEndTimerHandle,
-				FTimerDelegate::CreateLambda([this]()
+			SkillEndTimerHandle,
+			FTimerDelegate::CreateLambda([this]()
+			{
+				if (!this || !OwnerCharacter || !OwnerCharacter->StatComponent)
 				{
-					if (!this)
-					{
-						return;
-					}
+					return;
+				}
 
-					// 캐스팅이 끝나면 다시 타겟 탐색 상태로 복귀
-					ChangeState(GetSearchingState(), ECombatState::Searching);
-				}),
-				Duration,
-				false
-			);
+				if (CurrentState == ECombatState::Dead)
+				{
+					return;
+				}
+
+				if (OwnerCharacter->StatComponent->Health <= 0)
+				{
+					ChangeState(GetDeadState(), ECombatState::Dead);
+					return;
+				}
+
+				ChangeState(GetSearchingState(), ECombatState::Searching);
+			}),
+			Duration,
+			false
+		);
 		}
 		else
 		{
@@ -1038,6 +1030,10 @@ void UTFT_CombatComponent::HandleReturnAllUnitsHome()
 	
 	OwnerCharacter->GetCapsuleComponent()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
 	OwnerCharacter->GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
+	OwnerCharacter->bHideHPBarPermanently = false;
+	OwnerCharacter->HPBarWidgetVisible(true);
+	OwnerCharacter->UpdateHPBarWidget();
+	OwnerCharacter->UpdateMPBarWidget();
 }
 
 void UTFT_CombatComponent::Dead() const

@@ -108,6 +108,9 @@ protected:
 // 5. UI 및 FX
 // =========================================================================
 protected:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sounds")
+    class USoundBase* SoundUnitDrop;
+    
     // 스냅될 위치를 미리 보여주는 하이라이트
     UPROPERTY()
     AActor* HighlightActor;
@@ -129,6 +132,11 @@ protected:
 // 6. 외부 호출용 (Blueprint 등) 퍼블릭 함수
 // =========================================================================
 public:
+    void ReturnUnitEquippedItemsToInventory(ATFT_UnitCharacter* Unit);
+    
+    UFUNCTION(Exec)
+    void showmethemoney();
+    
     // 시작 시 맵에 깔린 기물 위치를 UnitHomeRegistry에 저장
     void SaveInitialLocations(); 
 
@@ -183,12 +191,22 @@ public:
     
     // 기물 판매
     void ExecuteSellUnit(class ATFT_UnitCharacter* UnitToSell);
+    // 기물 판매 시 재생할 사운드 슬롯
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TFT|Sounds")
+    class USoundBase* SoundUnitSell;
+    
 protected:
     // 블루프린트의 'SpawnActor' 노드에 있는 'Class' 핀 역할
     // 에디터에서 BP_Unit을 여기에 넣어주면 됨
     UPROPERTY(EditAnywhere, Category = "TFT|Spawn")
     TSubclassOf<class ATFT_UnitCharacter> UnitClass;
     
+    // 'E' 키를 담당할 입력 액션 변수
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
+    class UInputAction* IA_Sell;
+
+    // 'E' 키가 눌렸을 때 실행될 함수
+    void OnSellKeyPressed();
     // ========= 준섭이꺼 =========
 public:
     
@@ -225,5 +243,15 @@ protected:
     
     UPROPERTY()
     FVector2D LastKnownItemDragScreenPosition = FVector2D::ZeroVector;
+    
+    // 치트키용 입력 액션
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
+    class UInputAction* IA_CheatUnits;
+
+    // 5코 3성을 소환할 함수
+    void OnCheatUnitsPressed();
+
+    // 치트 전용 스폰 헬퍼 함수
+    void SpawnCheatUnit(ETFT_ChampionKey Key, int32 StarLevel);
     
 };

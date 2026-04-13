@@ -1,5 +1,6 @@
 ﻿#include "TFT_SkillComponent.h"
 #include "../../Struct/FStruct_TFT_Champion.h"
+#include "NiagaraSystem.h"
 
 UTFT_SkillComponent::UTFT_SkillComponent()
 {
@@ -24,6 +25,8 @@ void UTFT_SkillComponent::Initialize(const FStruct_TFT_Champion& Data)
 			SkillValues.Add(FCString::Atof(*Trimmed));
 		}
 	}
+	
+	SkillEffect = Data.Skill.Effect.LoadSynchronous();
 }
 
 void UTFT_SkillComponent::BeginPlay()

@@ -54,6 +54,10 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	
+	// 특정 월드 좌표와 가장 가까운 대기석의 인덱스 번호를 반환합니다.
+	UFUNCTION(BlueprintCallable, Category = "TFT|Bench")
+	int32 GetClosestBenchSlotIndex(FVector WorldLocation);
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Bench Grid")
 	int32 MaxBenchSlots = 9; // 대기석 칸 수 
 

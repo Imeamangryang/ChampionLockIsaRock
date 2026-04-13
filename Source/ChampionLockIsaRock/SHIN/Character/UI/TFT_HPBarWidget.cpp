@@ -57,12 +57,11 @@ void UTFT_HPBarWidget::NativeConstruct()
 	{
 		FProgressBarStyle ProgressBarStyle = HPProgressBar->GetWidgetStyle();
 		
-		if (OwnerCharacter->bIsEnemy)
+		if (OwnerCharacter && OwnerCharacter->bIsEnemy)
 		{
 			HPProgressBar->SetFillColorAndOpacity(FLinearColor(0.242281f, 0.05448f, 0.039546f, 1.f));
 		}
 		ProgressBarStyle.BackgroundImage.TintColor = FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.f));
-		//ProgressBarStyle.FillImage.TintColor = FSlateColor(FLinearColor(0.f, 1.f, 0.f, 1.f));
 		HPProgressBar->SetWidgetStyle(ProgressBarStyle);
 	}
 	
@@ -75,6 +74,18 @@ void UTFT_HPBarWidget::NativeConstruct()
 void UTFT_HPBarWidget::SetOwnerCharacter(ATFT_UnitCharacter* InOwnerCharacter)
 {
 	OwnerCharacter = InOwnerCharacter;
+	
+	if (HPProgressBar)
+	{
+		FProgressBarStyle ProgressBarStyle = HPProgressBar->GetWidgetStyle();
+		
+		if (OwnerCharacter && OwnerCharacter->bIsEnemy)
+		{
+			HPProgressBar->SetFillColorAndOpacity(FLinearColor(0.242281f, 0.05448f, 0.039546f, 1.f));
+		}
+		ProgressBarStyle.BackgroundImage.TintColor = FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.f));
+		HPProgressBar->SetWidgetStyle(ProgressBarStyle);
+	}
 	UpdateHPBar();
 	UpdateMPBar();
 	RefreshDividers();
@@ -97,26 +108,37 @@ void UTFT_HPBarWidget::UpdateHPBar() const
 		UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>();
 	}
 	
-	UISubsystem->BroadcastHPUpdate(OwnerCharacter, MaxHP, CurrentHP);
+	if (UISubsystem)
+	{
+		UISubsystem->BroadcastHPUpdate(OwnerCharacter, MaxHP, CurrentHP);
+	}
 	
-	const float Percent = CurrentHP / MaxHP;
+	const float Percent = MaxHP > 0.f ? (CurrentHP / MaxHP) : 0.f;
 	HPProgressBar->SetPercent(Percent);
 }
 
 void UTFT_HPBarWidget::UpdateMPBar() const
 {
+	if (!MPProgressBar || !OwnerCharacter || !OwnerCharacter->StatComponent)
+	{
+		return;
+	}
+
 	const float MaxMP = static_cast<float>(OwnerCharacter->StatComponent->MaxMana);
 	const float CurrentMP = static_cast<float>(OwnerCharacter->StatComponent->StartingMana);
-	
+
 	UTFT_UISubsystem* UISubsystem = nullptr;
 	if (ULocalPlayer* LP = GetOwningLocalPlayer())
 	{
 		UISubsystem = LP->GetSubsystem<UTFT_UISubsystem>();
 	}
 	
-	UISubsystem->BroadcastMPUpdate(OwnerCharacter, MaxMP, CurrentMP);
-	
-	const float Percent = CurrentMP / MaxMP;
+	if (UISubsystem)
+	{
+		UISubsystem->BroadcastMPUpdate(OwnerCharacter, MaxMP, CurrentMP);
+	}
+
+	const float Percent = MaxMP > 0.f ? (CurrentMP / MaxMP) : 0.f;
 	MPProgressBar->SetPercent(Percent);
 }
 
@@ -135,9 +157,9 @@ void UTFT_HPBarWidget::RefreshDividers() const
 		return;
 	}
 
-	const float BarWidth = 124.f;   // WidgetComponent DrawSize와 맞춰주는 값
-	const float BarHeight = 11.f;
-	const float DividerThickness = 3.f; // 기존 2.f보다 더 두껍게
+	const float BarWidth = 70.f;   // WidgetComponent DrawSize와 맞춰주는 값
+	const float BarHeight = 6.f;
+	const float DividerThickness = 2.f; // 기존 2.f보다 더 두껍게
 
 	for (int32 HPMark = HPPerDivider; HPMark < MaxHP; HPMark += HPPerDivider)
 	{
@@ -183,8 +205,8 @@ void UTFT_HPBarWidget::RefreshItemSlots()
 			continue;
 		}
 
-		SizeBox->SetWidthOverride(40.f);
-		SizeBox->SetHeightOverride(40.f);
+		SizeBox->SetWidthOverride(25.f);
+		SizeBox->SetHeightOverride(25.f);
 
 		UBorder* SlotBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		if (!SlotBorder)
@@ -192,7 +214,7 @@ void UTFT_HPBarWidget::RefreshItemSlots()
 			continue;
 		}
 
-		SlotBorder->SetPadding(FMargin(1.f));
+		SlotBorder->SetPadding(FMargin(0.5f));
 
 		if (SlotData.bOccupied)
 		{
@@ -206,7 +228,7 @@ void UTFT_HPBarWidget::RefreshItemSlots()
 				{
 					FSlateBrush Brush;
 					Brush.SetResourceObject(ItemIcon);
-					Brush.ImageSize = FVector2D(64.f, 64.f);
+					Brush.ImageSize = FVector2D(32.f, 32.f);
 					IconImage->SetBrush(Brush);
 					SlotBorder->SetContent(IconImage);
 				}
@@ -222,7 +244,7 @@ void UTFT_HPBarWidget::RefreshItemSlots()
 
 		if (UHorizontalBoxSlot* BoxSlot = ItemSlotBox->AddChildToHorizontalBox(SizeBox))
 		{
-			BoxSlot->SetPadding(FMargin(1.5f, 0.f));
+			BoxSlot->SetPadding(FMargin(0.5f, 0.f));
 			BoxSlot->SetHorizontalAlignment(HAlign_Center);
 			BoxSlot->SetVerticalAlignment(VAlign_Center);
 		}

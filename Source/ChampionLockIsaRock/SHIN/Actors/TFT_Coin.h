@@ -7,6 +7,7 @@
 class USphereComponent;
 class UStaticMeshComponent;
 class UNiagaraComponent;
+class USoundBase;
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATFT_Coin : public AActor
@@ -43,6 +44,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TFT|Coin")
 	UNiagaraComponent* CoinEffect;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|Audio")
+	USoundBase* PickupSound = nullptr;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TFT|Coin")
 	bool bCollected = false;

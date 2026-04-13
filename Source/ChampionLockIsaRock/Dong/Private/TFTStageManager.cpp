@@ -9,6 +9,8 @@
 #include "SHIN/Character/Components/TFT_StatComponent.h"
 #include "Dong/Public/GirdManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "TFTShopWidget.h"
 #include "SHIN/Actors/Components/TFT_ItemRewardSpawnerComponent.h"
 
 
@@ -25,7 +27,7 @@ ATFTStageManager::ATFTStageManager()
 void ATFTStageManager::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	 
 	// 스테이지 개수(StageDataList.Num())만큼 배열을 '시작 안 함(NotStarted)' 상태로 채워넣습니다.
 	StageHistory.Init(EStageStatus::NotStarted, StageDataList.Num());
 	
@@ -54,7 +56,7 @@ void ATFTStageManager::Tick(float DeltaTime)
 	{
 		if (ActiveEnemyUnits[i] && ActiveEnemyUnits[i]->StatComponent->Health <= 0)
 		{
-			// 찾았다! OnUnitDied 실행해!
+			// OnUnitDied 실행
 			OnUnitDied(ActiveEnemyUnits[i]);
 		}
 	}
@@ -105,6 +107,7 @@ void ATFTStageManager::StartRound()
 		{
 			if (auto CombatComp = Unit->FindComponentByClass<UTFT_CombatComponent>())
 			{
+				CombatComp->SetComponentTickEnabled(true);
 				CombatComp->StartCombat();
 			}
 		}
@@ -117,6 +120,7 @@ void ATFTStageManager::StartRound()
 		{
 			if (auto CombatComp = Enemy->FindComponentByClass<UTFT_CombatComponent>())
 			{
+				CombatComp->SetComponentTickEnabled(true);
 				CombatComp->StartCombat();
 			}
 		}
@@ -127,6 +131,11 @@ void ATFTStageManager::EndRound(bool bIsVictory)
 {
 	if (!bIsCombatActive) return;
 	bIsCombatActive = false;
+	
+	if (bIsVictory && SoundRoundEndVictory)
+	{
+		UGameplayStatics::PlaySound2D(this, SoundRoundEndVictory);
+	}
 
 	// 1. 진행 중인 연장전 타이머가 있다면 취소합니다.
 	GetWorldTimerManager().ClearTimer(OvertimeTimerHandle);
@@ -165,6 +174,11 @@ void ATFTStageManager::EndRound(bool bIsVictory)
 void ATFTStageManager::SetupStage(int32 Index)
 {
 	UE_LOG(LogTemp, Warning, TEXT("SetupStage 실행됨! 스테이지 번호: %d"), Index);
+	
+	if (SoundStageTransition)
+	{
+		UGameplayStatics::PlaySound2D(this, SoundStageTransition);
+	}
 	
 	if (!StageDataList.IsValidIndex(Index))
 	{
@@ -221,14 +235,26 @@ void ATFTStageManager::SetupStage(int32 Index)
 void ATFTStageManager::OnUnitDied(ATFT_UnitCharacter* DeadUnit)
 {
 	if (!DeadUnit) return;
+	
+	// 1. 전투 CombatComponent의 틱(Tick)을 꺼서멈춥니다.
+	if (auto CombatComp = DeadUnit->FindComponentByClass<UTFT_CombatComponent>())
+	{
+		CombatComp->SetComponentTickEnabled(false);
+	}
+    
+	// 2. 가던 관성 때문에 바닥을 미끄러지는 걸 막기 위해 이동을 정지시킵니다.
+	if (AController* UnitController = DeadUnit->GetController())
+	{
+		UnitController->StopMovement();
+	}
 
-	// 명단에서 제거 (여기서 제거되기 때문에 다음 Tick에서는 이 유닛을 다시 찾지 않음)
+	// 명단에서 제거
 	if (ActivePlayerUnits.Contains(DeadUnit)) ActivePlayerUnits.Remove(DeadUnit);
 	if (ActiveEnemyUnits.Contains(DeadUnit)) ActiveEnemyUnits.Remove(DeadUnit);
 
 	UE_LOG(LogTemp, Warning, TEXT("유닛 사망 감지: %s | 남은 적: %d"), *DeadUnit->GetName(), ActiveEnemyUnits.Num());
 
-	// 승패 판단 (이 로직도 그대로 유지!)
+	// 승패 판단
 	if (ActiveEnemyUnits.Num() == 0)
 	{
 		EndRound(true); 
@@ -274,13 +300,13 @@ void ATFTStageManager::ResetUnits()
 				Unit->StatComponent->StartingMana = 0;
 				Unit->UpdateHPBarWidget();
 				Unit->UpdateMPBarWidget();
+				Unit->HPBarWidgetVisible(true);
 			}
 
-			// 4. [상태 리셋] CombatComponent를 Idle 상태로 돌려놓습니다.
-			// 이걸 안 하면 기물들이 살아나도 계속 'DeadState'
+			// 4. [상태 리셋] 
 			if (auto CombatComp = Unit->FindComponentByClass<UTFT_CombatComponent>())
 			{
-				CombatComp->EndCombat(); // 팀원 코드: 상태를 Idle로 바꾸고 타겟 초기화함
+				CombatComp->HandleReturnAllUnitsHome();
 			}
           
 			// 5. 애니메이션 리셋 (혹시 죽는 애니메이션에서 멈춰있을까봐)
@@ -297,26 +323,35 @@ void ATFTStageManager::ResetUnits()
 void ATFTStageManager::ProceedToNextRound()
 {
 	GetWorldTimerManager().ClearTimer(StageTransitionTimerHandle);
-	
+    
 	// 다음 스테이지로 넘어가기전에, 방금 끝난 스테이지에 승패 여부를 찍음
 	if (StageHistory.IsValidIndex(CurrentStageIndex))
 	{
 		StageHistory[CurrentStageIndex] = bLastRoundVictory ? EStageStatus::Won : EStageStatus::Lost;
 	}
-	
+    
 	if (bLastRoundVictory)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("정산: 승리! 다음 스테이지 준비."));
+		if (CurrentStageIndex >= 7) 
+		{
+			UE_LOG(LogTemp, Warning, TEXT("8스테이지 클리어"));
+			// 컷신
+			UGameplayStatics::OpenLevel(this, FName("EndingMap"));
+			return; // 함수를 여기서 끝내서 부활, 스폰, 다음 라운드 세팅을 막습니다.
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("정산: 승리 다음 스테이지 준비"));
 		CurrentStageIndex++;
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("정산: 패배... 현재 스테이지 다시 도전."));
+		UE_LOG(LogTemp, Warning, TEXT("정산: 패배 현재 스테이지 다시 도전"));
 	}
+    
 	// 아군 부활 및 적군 스폰
 	ResetUnits();
 	SetupStage(CurrentStageIndex);
-	
+    
 	// 다음 스테이지 세팅이 완료된 직후 경험치를 줍니다.
 	if (bLastRoundVictory) 
 	{
@@ -328,19 +363,34 @@ void ATFTStageManager::ProceedToNextRound()
 			{
 				//경험치 보상 2
 				PS->AddStageEndXP(); // 여기서 레벨업이 일어나면 BroadcastUnitCount도 호출됨
-				// 골드 보상 5
-				PS->AddGold(5); 
+				// 골드 보상 20
+				PS->AddGold(20); 
 			}
-				PC->BroadcastUnitCount();
-		}
+			PC->BroadcastUnitCount();
+		} 
 	}
 	if (ATopDownController* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController()))
 	{
 		PC->ProcessPendingUpgrades();
 	}
-	
+    
 	// UI들에게 준비 시작이라고 알림
 	OnPreparationStarted.Broadcast();
+	
+	TArray<UUserWidget*> FoundShopWidgets;
+    
+	// 화면에 존재하는 UTFTShopWidget 클래스를 모두 찾아 배열에 담습니다.
+	UWidgetBlueprintLibrary::GetAllWidgetsOfClass(GetWorld(), FoundShopWidgets, UTFTShopWidget::StaticClass(), false);
+
+	for (UUserWidget* Widget : FoundShopWidgets)
+	{
+		if (UTFTShopWidget* ShopWidget = Cast<UTFTShopWidget>(Widget))
+		{
+			ShopWidget->RollShop();
+			UE_LOG(LogTemp, Warning, TEXT("상점 초기화"));
+			break;
+		}
+	}
 }
 
 void ATFTStageManager::StartOvertime()

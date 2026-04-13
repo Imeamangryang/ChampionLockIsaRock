@@ -22,4 +22,7 @@ struct FStruct_TFT_Skills
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UTexture2D> Image;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<class UNiagaraSystem> Effect; 
 };

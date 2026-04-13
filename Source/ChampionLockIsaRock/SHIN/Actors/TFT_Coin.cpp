@@ -8,6 +8,7 @@
 #include "Materials/MaterialInterface.h"
 #include "NiagaraSystem.h"
 #include "NiagaraComponent.h"
+#include "Sound/SoundBase.h"
 
 ATFT_Coin::ATFT_Coin()
 {
@@ -40,11 +41,16 @@ ATFT_Coin::ATFT_Coin()
 	}
 	
 	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> CoinEffectAsset(
-	TEXT("/Game/VFX/DrapEffet/VFX/NE_drop_effects03.NE_drop_effects03")
-);
+	TEXT("/Game/VFX/DrapEffet/VFX/NE_drop_effects03.NE_drop_effects03"));
 	if (CoinEffectAsset.Succeeded())
 	{
 		CoinEffect->SetAsset(CoinEffectAsset.Object);
+	}
+	
+	static ConstructorHelpers::FObjectFinder<USoundBase> PickupSoundAsset(TEXT("/Game/SHIN/Sound/AddGold.AddGold"));
+	if (PickupSoundAsset.Succeeded())
+	{
+		PickupSound = PickupSoundAsset.Object;
 	}
 }
 
@@ -122,7 +128,12 @@ void ATFT_Coin::OnPickupSphereBeginOverlap(
 	{
 		return;
 	}
-
+	
+	if (PickupSound)
+	{
+		UGameplayStatics::PlaySound2D(this, PickupSound);
+	}
+	
 	PS->AddGold(GoldAmount);
 
 	bCollected = true;

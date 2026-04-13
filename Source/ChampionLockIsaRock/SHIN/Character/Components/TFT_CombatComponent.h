@@ -41,7 +41,9 @@ public:
 	void HandleSelfAreaSkill();
 	void HandleProjectileSkill();
 	void HandleTargetAreaSkill();
-
+	void SpawnBasicAttackProjectile(int32 Damage) const;
+	
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -112,4 +114,7 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="Combat")
 	float CombatStartRotateSpeed = 5.0f;
+	
+	UPROPERTY(EditAnywhere, Category="Combat")
+	TSubclassOf<class ATFT_SkillProjectile> BasicAttackProjectileClass;
 };

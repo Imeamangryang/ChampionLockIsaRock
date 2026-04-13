@@ -1,4 +1,7 @@
 ﻿#include "TFT_ItemOrb.h"
+
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Dong/Public/TopDownController.h"
@@ -6,6 +9,7 @@
 #include "SHIN/GameFramework/TFT_GameInstance.h"
 #include "Engine/DataTable.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 ATFT_ItemOrb::ATFT_ItemOrb()
 {
@@ -26,6 +30,10 @@ ATFT_ItemOrb::ATFT_ItemOrb()
 	OrbMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	OrbMesh->SetRelativeRotation(FRotator(0.f, -90.f, -50.f));
 	
+	OrbEffect = CreateDefaultSubobject<UNiagaraComponent>(TEXT("OrbEffect"));
+	OrbEffect->SetupAttachment(Root);
+	OrbEffect->bAutoActivate = true;
+	
 	ConstructorHelpers::FObjectFinder<UStaticMesh> OrbMeshAsset(TEXT("/Game/SHIN/Blueprints/Items/Sphere.Sphere"));
 	{
 		OrbMesh->SetStaticMesh(OrbMeshAsset.Object);
@@ -34,6 +42,18 @@ ATFT_ItemOrb::ATFT_ItemOrb()
 	ConstructorHelpers::FObjectFinder<UMaterialInterface> OrbMaterialAsset(TEXT("/Game/SHIN/Blueprints/Items/MT_ItemOrb_Inst.MT_ItemOrb_Inst"));
 	{
 		OrbMesh->SetMaterial(0, OrbMaterialAsset.Object);
+	}
+	
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> OrbEffectAsset(TEXT("/Game/VFX/Imortal_Loot_Drop_VFX/Niagara/NS_Loot_Drop.NS_Loot_Drop"));
+	if (OrbEffectAsset.Succeeded())
+	{	
+		OrbEffect->SetAsset(OrbEffectAsset.Object);
+	}
+	
+	ConstructorHelpers::FObjectFinder<USoundBase> OrbSoundAsset(TEXT("/Game/SHIN/Sound/Addbooty_out.Addbooty_out"));
+	if (OrbSoundAsset.Succeeded())
+	{
+		OrbSound = OrbSoundAsset.Object;
 	}
 }
 
@@ -67,7 +87,7 @@ void ATFT_ItemOrb::BeginPlay()
 	Super::BeginPlay();
 
 	InitializeRandomItem();
-
+	
 	StartLocation = GetActorLocation();
 
 	const FVector2D Random2D = FMath::RandPointInCircle(RandomOffsetRadius);
@@ -95,14 +115,20 @@ void ATFT_ItemOrb::OnPickupSphereBeginOverlap(
 		return;
 	}
 
-	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!PlayerPawn || OtherActor != PlayerPawn)
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+	if (!IsValid(PlayerController))
 	{
 		return;
 	}
 
-	ATopDownController* TDController = Cast<ATopDownController>(UGameplayStatics::GetPlayerController(this, 0));
-	if (!TDController || !TDController->ItemInventoryComponent)
+	APawn* ControlledPawn = PlayerController->GetPawn();
+	if (!IsValid(ControlledPawn) || OtherActor != ControlledPawn)
+	{
+		return;
+	}
+
+	ATopDownController* TDController = Cast<ATopDownController>(PlayerController);
+	if (!IsValid(TDController) || !IsValid(TDController->ItemInventoryComponent))
 	{
 		return;
 	}
@@ -121,6 +147,11 @@ void ATFT_ItemOrb::OnPickupSphereBeginOverlap(
 	if (!bAdded)
 	{
 		return;
+	}
+
+	if (OrbSound)
+	{
+		UGameplayStatics::PlaySound2D(this, OrbSound);
 	}
 
 	TDController->ItemInventoryComponent->NotifyInventoryUpdated();

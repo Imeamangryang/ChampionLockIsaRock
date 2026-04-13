@@ -139,7 +139,7 @@ void ABenchManager::RegisterUnitToSlot(int32 Index, AActor* Unit)
 		UE_LOG(LogTemp, Warning, TEXT("%d번 대기석에 기물이 등록되었습니다."), Index);
 	}
 }
-
+ 
 // 3. 특정 인덱스의 월드 좌표 구하기
 FVector ABenchManager::GetSlotWorldLocation(int32 Index)
 {
@@ -176,4 +176,32 @@ void ABenchManager::ClearUnitFromBench(AActor* TargetUnit)
 			return; // 찾아서 지웠으니 더 뒤질 필요 없이 함수를 끝냅니다.
 		}
 	}
+}
+
+int32 ABenchManager::GetClosestBenchSlotIndex(FVector WorldLocation)
+{
+	if (!BenchISM) return -1;
+
+	int32 ClosestIndex = -1;
+	float MinDistanceSq = 1e+20f;
+
+	int32 InstanceCount = BenchISM->GetInstanceCount();
+	for (int32 i = 0; i < InstanceCount; ++i)
+	{
+		FTransform InstanceTransform;
+		if (BenchISM->GetInstanceTransform(i, InstanceTransform, true))
+		{
+			// 타일의 순수 위치에 오프셋을 더한 '실제 보드 위 좌표' 계산
+			FVector ActualTileLoc = InstanceTransform.GetLocation() + BenchTileOffset;
+          
+			float DistSq = FVector::DistSquared(WorldLocation, ActualTileLoc);
+
+			if (DistSq < MinDistanceSq)
+			{
+				MinDistanceSq = DistSq;
+				ClosestIndex = i; // 가장 가까운 인덱스 번호를 기억
+			}
+		}
+	}
+	return ClosestIndex; // 찾은 인덱스 반환
 }

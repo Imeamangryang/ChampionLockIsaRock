@@ -113,6 +113,8 @@ void ATopDownController::SetupInputComponent()
        EnhancedInputComponent->BindAction(IA_Grabbed, ETriggerEvent::Completed, this, &ATopDownController::OnDropReleased);
        EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ATopDownController::OnMoveInputReleased);
     	EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Triggered, this, &ATopDownController::OnZoom);
+    	EnhancedInputComponent->BindAction(IA_Sell, ETriggerEvent::Started, this, &ATopDownController::OnSellKeyPressed);
+    	EnhancedInputComponent->BindAction(IA_CheatUnits, ETriggerEvent::Started, this, &ATopDownController::OnCheatUnitsPressed);
     }
 }
 
@@ -125,8 +127,8 @@ void ATopDownController::OnZoom(const FInputActionValue& Value)
 		USpringArmComponent* SpringArm = BoardCameraActor->FindComponentByClass<USpringArmComponent>();
 		if (SpringArm)
 		{
-			float NewLength = SpringArm->TargetArmLength + (ZoomValue * 100.0f);
-			SpringArm->TargetArmLength = FMath::Clamp(NewLength, 100.0f, 1200.0f);
+			float NewLength = SpringArm->TargetArmLength + (ZoomValue * 50.0f);
+			SpringArm->TargetArmLength = FMath::Clamp(NewLength, 50.0f, 1200.0f);
 		}
 	}
 }
@@ -318,11 +320,12 @@ void ATopDownController::PerformDrop()
               GrabbedUnit->SetActorLocation(FVector(OtherUnitLoc.X, OtherUnitLoc.Y, OriginalLocation.Z));
               OtherUnit->SetActorLocation(OriginalLocation);
 
-              if (bIsComingFromBench)
-              {
-                 int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
-                 if (EmptyIndex != -1) CachedBenchManager->RegisterUnitToSlot(EmptyIndex, OtherUnit);
-              }
+           	  if (bIsComingFromBench)
+           	  {
+           		// 첫 번째 빈칸이 아니라, 방금 잡은 기물이 '원래 있던 자리'의 인덱스로 돌려보냄
+           		int32 OriginalIndex = CachedBenchManager->GetClosestBenchSlotIndex(OriginalLocation);
+           		if (OriginalIndex != -1) CachedBenchManager->RegisterUnitToSlot(OriginalIndex, OtherUnit);
+           	  }
               else
               {
                  CachedGridManager->RegisterUnitToGrid(OtherUnit);
@@ -342,8 +345,8 @@ void ATopDownController::PerformDrop()
            {
            	 GrabbedUnit->bIsBenched = true; // 벤치로 갔으니 true로 설정
               
-           	 int32 NewSlotIndex = CachedBenchManager->GetFirstEmptySlotIndex();
-           	 if (NewSlotIndex != -1) CachedBenchManager->RegisterUnitToSlot(NewSlotIndex, GrabbedUnit);
+           	int32 TargetIndex = CachedBenchManager->GetClosestBenchSlotIndex(FinalSnappedLoc);
+           	if (TargetIndex != -1) CachedBenchManager->RegisterUnitToSlot(TargetIndex, GrabbedUnit);
            }
            else if (!bGoingToBench && CachedGridManager)
            {
@@ -353,6 +356,10 @@ void ATopDownController::PerformDrop()
            }
    
        	  UnitHomeRegistry.Add(GrabbedUnit, GrabbedUnit->GetActorTransform());
+       	  if (SoundUnitDrop)
+       	  {
+       	  	  UGameplayStatics::PlaySound2D(this, SoundUnitDrop, 1, 1, 0.3);
+       	  } 
        }
        else
        {
@@ -440,6 +447,16 @@ void ATopDownController::OnMoveInputReleased()
 	if (GetHitResultUnderCursor(ECC_WorldStatic, true, GroundHit))
 	{
 		CachedDestination = GroundHit.Location;
+		
+		if (ACharacter* MyCharacter = Cast<ACharacter>(GetPawn())) // 현재 내가 조종 중인 캐릭터(전설이)를 가져옵니다.
+		{
+			if (UAnimInstance* AnimInstance = MyCharacter->GetMesh()->GetAnimInstance()) // 애니메이션 담당자를 부릅니다.
+			{
+				// 0.1초의 부드러운 전환(Blend Out)을 주면서 재생 중인 모든 몽타주를 강제로 끕니다.
+				AnimInstance->Montage_Stop(0.1f); 
+			}
+		}
+		
 		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, CachedDestination);
 
 		if (FXCursor)
@@ -591,11 +608,6 @@ void ATopDownController::SpawnUnitFromBP(ETFT_ChampionKey Key)
 			UnitHomeRegistry.Add(SpawnedUnit, SpawnedUnit->GetActorTransform());
 		}
 	}
-	else
-	{
-		// Branch False -> Print String
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, TEXT("대기석이 꽉 찼습니다."));
-	}
 }
 
 bool ATopDownController::IsUnitOnBench(AActor* Unit) const
@@ -607,47 +619,87 @@ bool ATopDownController::IsUnitOnBench(AActor* Unit) const
 	}
 	return false;
 }
+void ATopDownController::showmethemoney()
+{
+	if (ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>())
+	{
+		PS->AddGold(999);
+	}
+}
  
 void ATopDownController::ExecuteSellUnit(ATFT_UnitCharacter* UnitToSell)
 {
-	if (!UnitToSell) return;
+    if (!UnitToSell) return;
 
-	// 1. PlayerState에 돈 추가
-	if (ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>())
-	{
-		// UnitToSell->Cost 가 없다면 임시로 1골드로 설정
-		int32 Price = 1; 
-		PS->AddGold(Price);
-		UE_LOG(LogTemp, Warning, TEXT("기물 판매 완료! +%d 골드. 현재 잔액: %d"), Price, PS->PlayerGold);
-	}
+    // 1. PlayerState에 돈 추가
+    if (ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>())
+    {
+       // 기물의 코스트와 성급 가져오기
+       int32 BaseCost = UnitToSell->ChampionData.Cost;   
+       int32 Star = UnitToSell->starLevel;
 
-	// 2. 장부에서 지우기 (어디 있던 기물이든 일단 지움)
-	if (CachedBenchManager) 
-	{
-		CachedBenchManager->ClearUnitFromBench(UnitToSell);
-	}
-	if (CachedGridManager) 
-	{
-		CachedGridManager->ClearUnitFromGrid(UnitToSell);
-	}
+       // 1. 이 기물을 만드는 데 들어간 총 1성 기물의 개수 (1성=1개, 2성=3개, 3성=9개)
+       int32 TotalUnits = 1;
+       if (Star == 2) TotalUnits = 3;
+       else if (Star == 3) TotalUnits = 9;
 
-	// 3. 컨트롤러의 위치 기억소(주소록)에서 제거
-	if (UnitHomeRegistry.Contains(UnitToSell))
-	{
-		UnitHomeRegistry.Remove(UnitToSell);
-	}
+       // 2. 원가(기본 가치) 계산
+       int32 Price = BaseCost * TotalUnits;
 
-	// 4. (선택 사항) 스테이지 매니저가 있다면 전투 명단에서도 제거해야 함
+       // 3. 1코스트를 제외한 나머지 기물에 대해 판매 패널티 적용
+       if (BaseCost > 1)
+       {
+           if (Star == 2)
+           {
+               Price -= 1; // 2성일 때 -1원
+           }
+           else if (Star == 3)
+           {
+               Price -= 2; // 3성일 때 -2원
+           }
+       }
 
-	// 5. 기물 완전 파괴
-	UnitToSell->Destroy();
-	BroadcastUnitCount();
-	
-	// 기물이 팔렸으니 시너지를 다시 계산합니다.
-	if (UTFT_SynergyComponent* SynergyComp = FindComponentByClass<UTFT_SynergyComponent>())
-	{
-		SynergyComp->RecalculateSynergies();
-	}
+       // 만약 버그나 데이터 오류로 가격이 0 이하로 떨어지는 것을 막는 안전장치
+       Price = FMath::Max(Price, 1);
+    	
+       PS->AddGold(Price);
+    	
+    	if (SoundUnitSell)
+    	{
+    		UGameplayStatics::PlaySound2D(this, SoundUnitSell);
+    	}
+    	
+       UE_LOG(LogTemp, Warning, TEXT("기물 판매 완료! %d성 %d코스트 -> +%d 골드 획득. 현재 잔액: %d"), Star, BaseCost, Price, PS->PlayerGold);
+    }
+
+    // 2. 장부에서 지우기 (어디 있던 기물이든 일단 지움)
+    if (CachedBenchManager) 
+    {
+       CachedBenchManager->ClearUnitFromBench(UnitToSell);
+    }
+    if (CachedGridManager) 
+    {
+       CachedGridManager->ClearUnitFromGrid(UnitToSell);
+    }
+
+    // 3. 컨트롤러의 위치 기억소(주소록)에서 제거
+    if (UnitHomeRegistry.Contains(UnitToSell))
+    {
+       UnitHomeRegistry.Remove(UnitToSell);
+    }
+
+    // 4. (선택 사항) 스테이지 매니저가 있다면 전투 명단에서도 제거해야 함
+    ReturnUnitEquippedItemsToInventory(UnitToSell);
+    
+    // 5. 기물 완전 파괴
+    UnitToSell->Destroy();
+    BroadcastUnitCount();
+    
+    // 기물이 팔렸으니 시너지를 다시 계산합니다.
+    if (UTFT_SynergyComponent* SynergyComp = FindComponentByClass<UTFT_SynergyComponent>())
+    {
+       SynergyComp->RecalculateSynergies();
+    }
 }
 
 void ATopDownController::BroadcastUnitCount()
@@ -825,4 +877,107 @@ ATFT_UnitCharacter* ATopDownController::FindItemDropTargetAtScreenPosition(const
 		}
 	}
 	return nullptr;
+}
+
+void ATopDownController::ReturnUnitEquippedItemsToInventory(ATFT_UnitCharacter* Unit)
+{
+	if (!Unit || !ItemInventoryComponent)
+	{
+		return;
+	}
+
+	for (FStruct_TFTEquippedItemSlot& Slot : Unit->EquippedItemSlots)
+	{
+		if (Slot.bOccupied && !Slot.ItemInstance.ItemId.IsNone())
+		{
+			ItemInventoryComponent->AddItem(Slot.ItemInstance);
+			Slot.bOccupied = false;
+			Slot.ItemInstance = FStruct_TFTItemInstance{};
+		}
+	}
+
+	Unit->RefreshItemSlotWidget();
+}
+
+void ATopDownController::OnSellKeyPressed()
+{
+	// 기물을 들고 있고(bIsHoldingUnit), 실제로 잡힌 기물이 있을 때만 실행
+	if (bIsHoldingUnit && GrabbedUnit)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("E 키 입력: 기물 즉시 판매 시작"));
+
+		// 1. 이미 만들어둔 판매 함수 호출
+		ExecuteSellUnit(GrabbedUnit);
+
+		// 2. 판매 후 '들고 있는 상태' 초기화 (이거 안 하면 허공을 들고 있게 됩니다!)
+		bIsHoldingUnit = false;
+		GrabbedUnit = nullptr;
+
+		// 3. 시각적 가이드(하이라이트, 그리드) 모두 끄기
+		if (HighlightActor) HighlightActor->SetActorHiddenInGame(true);
+		if (CachedGridManager) CachedGridManager->ToggleGridVisibility(false);
+		if (CachedBenchManager) CachedBenchManager->ToggleBenchVisibility(false);
+        
+		// 4. 인원수 UI 갱신 (이미 ExecuteSellUnit에 들어있을 수도 있지만 확실하게 하기 위해)
+		BroadcastUnitCount();
+	}
+}
+
+void ATopDownController::OnCheatUnitsPressed()
+{
+	UE_LOG(LogTemp, Warning, TEXT("치트키 활성화"));
+	
+	if (ATFTPlayerState* PS = GetPlayerState<ATFTPlayerState>())
+	{
+		// 현재 레벨이 10 미만인 동안 계속해서 '다음 레벨까지 남은 경험치'를 딱 맞춰서 먹여줍니다.
+		while (PS->PlayerLevel < 10)
+		{
+			int32 XPNeeded = PS->MaxXP - PS->CurrentXP;
+			PS->AddXP(XPNeeded); 
+		}
+	}
+
+	// 케일 3성 소환 (Enum 이름 확인 필요!)
+	SpawnCheatUnit(ETFT_ChampionKey::Sejuani, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Lissandra, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Pantheon, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Braum, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Ashe, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Anivia, 3);
+	
+	SpawnCheatUnit(ETFT_ChampionKey::Volibear, 3);
+    
+	// 소환 후 인원수 및 시너지 갱신
+	BroadcastUnitCount();
+	if (UTFT_SynergyComponent* SynergyComp = FindComponentByClass<UTFT_SynergyComponent>())
+	{
+		SynergyComp->RecalculateSynergies();
+	}
+}
+
+void ATopDownController::SpawnCheatUnit(ETFT_ChampionKey Key, int32 StarLevel)
+{
+	if (!UnitClass || !CachedBenchManager) return;
+
+	int32 EmptyIndex = CachedBenchManager->GetFirstEmptySlotIndex();
+	if (EmptyIndex > -1)
+	{
+		FVector BenchSlotLoc = CachedBenchManager->GetBenchSlotCenterByIndex(EmptyIndex);
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		if (ATFT_UnitCharacter* NewUnit = GetWorld()->SpawnActor<ATFT_UnitCharacter>(UnitClass, BenchSlotLoc, FRotator::ZeroRotator, SpawnParams))
+		{
+			// 핵심: 성급을 3으로 바로 넘겨줌
+			NewUnit->InitWithChampionKey(Key, StarLevel);
+            
+			CachedBenchManager->RegisterUnitToSlot(EmptyIndex, NewUnit);
+			UnitHomeRegistry.Add(NewUnit, NewUnit->GetActorTransform());
+		}
+	}
 }

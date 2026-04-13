@@ -61,5 +61,5 @@ public:
 	int32 HPPerDivider = 150;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item Slot")
-	float EquippedItemOffsetY = -40.f;
+	float EquippedItemOffsetY = -22.f;
 };

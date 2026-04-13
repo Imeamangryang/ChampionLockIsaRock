@@ -6,6 +6,7 @@
 
 class USphereComponent;
 class UStaticMeshComponent;
+class UNiagaraComponent;
 class ATFT_Coin;
 
 UCLASS()
@@ -40,6 +41,12 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UStaticMeshComponent* OrbMesh;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TFT|Coin")
+	UNiagaraComponent* OrbEffect;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|Audio")
+	class USoundBase* OrbSound = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="TFT|CoinOrb")
 	bool bCollected = false;
@@ -60,7 +67,7 @@ public:
 	float ArcHeight = 450.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|CoinOrb|SpawnArc")
-	float MoveDuration = 1.5f;
+	float MoveDuration = 1.0f;
 
 protected:
 	UPROPERTY()

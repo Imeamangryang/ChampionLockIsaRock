@@ -39,4 +39,7 @@ public:
 	
 	UPROPERTY(BlueprintReadOnly)
 	TSoftObjectPtr<UTexture2D> SkillImage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TObjectPtr<class UNiagaraSystem> SkillEffect; 
 };

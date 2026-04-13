@@ -4,11 +4,16 @@
 #include "Components/TFT_CombatComponent.h"
 #include "../Struct/FTFT_ChampionData.h"
 #include "../GameFramework/TFT_GameInstance.h"
-#include "Components/WidgetComponent.h"
 #include "UI/TFT_HPBarWidget.h"
 #include "Components/CapsuleComponent.h"
 #include "SHIN/Character/Components/TFT_ItemInventoryComponent.h"
 #include "SHIN/Struct/BaseModifier.h"
+#include "Blueprint/UserWidget.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 ATFT_UnitCharacter::ATFT_UnitCharacter()
 {
@@ -17,20 +22,15 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 	GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Block);
-	
+
 	StatComponent = CreateDefaultSubobject<UTFT_StatComponent>(TEXT("StatComponent"));
 	SkillComponent = CreateDefaultSubobject<UTFT_SkillComponent>(TEXT("SkillComponent"));
 	CombatComponent = CreateDefaultSubobject<UTFT_CombatComponent>(TEXT("CombatComponent"));
-	
-	HPBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBarWidgetComponent"));
-	HPBarWidgetComponent->SetupAttachment(RootComponent);
-	HPBarWidgetComponent->SetRelativeLocation (FVector(0.f, 0.f, 150.f));
-	HPBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
-	
-	static ConstructorHelpers::FClassFinder<UUserWidget> HPBarWidgetClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_HealthBar.WBP_HealthBar_C")); 
-	if (HPBarWidgetClass.Succeeded())
+
+	static ConstructorHelpers::FClassFinder<UTFT_HPBarWidget> HPBarWidgetBPClass(TEXT("/Game/SHIN/UI/Blueprints/WBP_HealthBar.WBP_HealthBar_C"));
+	if (HPBarWidgetBPClass.Succeeded())
 	{
-		HPBarWidgetComponent->SetWidgetClass(HPBarWidgetClass.Class);
+		HPBarWidgetClass = HPBarWidgetBPClass.Class;
 	}
 	else
 	{
@@ -45,7 +45,7 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
 		Capsule->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
 		Capsule->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
-		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore); // 기본은 대기 상태 기준
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	}
 	
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
@@ -53,6 +53,30 @@ ATFT_UnitCharacter::ATFT_UnitCharacter()
 		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		MeshComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 		MeshComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	}
+	
+	static ConstructorHelpers::FObjectFinder<USoundBase> DeathSoundAsset(TEXT("/Game/SHIN/Sound/Killstreak_SFX_Assist_1.Killstreak_SFX_Assist_1"));
+	if (DeathSoundAsset.Succeeded())
+	{
+		DeathSound = DeathSoundAsset.Object;
+	}
+	
+	static ConstructorHelpers::FObjectFinder<USoundBase> AttackSoundAsset(TEXT("/Game/SHIN/Sound/BasicAttackSound_1.BasicAttackSound_1"));
+	if (AttackSoundAsset.Succeeded())
+	{
+		AttackSound = AttackSoundAsset.Object;
+	}
+	
+	static ConstructorHelpers::FObjectFinder<USoundBase> SkillSoundAsset(TEXT("/Game/SHIN/Sound/SkillSound.SkillSound"));
+	if (SkillSoundAsset.Succeeded())
+	{
+		SkillSound = SkillSoundAsset.Object;
+	}
+	
+	static ConstructorHelpers::FObjectFinder<USoundBase> ItemEquipSoundAsset(TEXT("/Game/SHIN/Sound/IteminUnit_out.IteminUnit_out"));
+	if (ItemEquipSoundAsset.Succeeded())
+	{
+		ItemEquipSound = ItemEquipSoundAsset.Object;
 	}
 }
 
@@ -62,12 +86,12 @@ void ATFT_UnitCharacter::BeginPlay()
 	
 	if (bIsEnemy)
 	{
-		// 적일 경우에도 피킹이 되지 않도록 무시
 		GetMesh()->SetCollisionResponseToChannel(ECollisionChannel::ECC_Visibility, ECollisionResponse::ECR_Ignore);
 	}
+
 	InitializeItemSlots();
-	
 	InitWithChampionKey(ChampionKey, starLevel);
+	CreateHPBarWidget();
 }
 
 void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
@@ -75,7 +99,6 @@ void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
 	Super::OnConstruction(Transform);
 	
 #if WITH_EDITOR
-	// Character Type을 바꾸면 메시 설정
 	FString Name = GetChampionNameString();
 	if (Name.IsEmpty()) return;
 	
@@ -92,7 +115,6 @@ void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
 		UE_LOG(LogTemp, Warning, TEXT("Failed to load mesh: %s"), *Path);
 	}
 	
-	// 메시 설정 후 애니메이션 블루프린트도 설정
 	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s_Skeleton_AnimBlueprint.%s_Skeleton_AnimBlueprint_C"), *Name, *Name, *Name);
 
 	if (UClass* AnimClass = LoadObject<UClass>(nullptr, *AnimPath))
@@ -107,11 +129,22 @@ void ATFT_UnitCharacter::OnConstruction(const FTransform& Transform)
 #endif
 }
 
+void ATFT_UnitCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+	
+	if (HPBarScreenWidget)
+	{
+		HPBarScreenWidget->RemoveFromParent();
+		HPBarScreenWidget = nullptr;
+	}
+}
+
 void ATFT_UnitCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
-	
+
+	UpdateHPBarScreenPosition();
 }
 
 void ATFT_UnitCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -119,9 +152,95 @@ void ATFT_UnitCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
+void ATFT_UnitCharacter::CreateHPBarWidget()
+{
+	if (HPBarScreenWidget || !HPBarWidgetClass)
+	{
+		return;
+	}
+
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC)
+	{
+		return;
+	}
+
+	HPBarScreenWidget = CreateWidget<UTFT_HPBarWidget>(PC, HPBarWidgetClass);
+	if (!HPBarScreenWidget)
+	{
+		return;
+	}
+
+	HPBarScreenWidget->AddToViewport();
+	HPBarScreenWidget->SetOwnerCharacter(this);
+	HPBarScreenWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+	HPBarScreenWidget->SetAlignmentInViewport(FVector2D(0.5f, 1.0f));
+	UpdateHPBarScreenPosition();
+}
+
+FVector ATFT_UnitCharacter::GetHPBarWorldAnchorLocation() const
+{
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (Capsule)
+	{
+		const float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		return GetActorLocation() + FVector(0.f, 0.f, CapsuleHalfHeight + 30.f);
+	}
+
+	return GetActorLocation() + HPBarWorldOffset;
+}
+
+void ATFT_UnitCharacter::UpdateHPBarScreenPosition()
+{
+	if (!HPBarScreenWidget)
+	{
+		return;
+	}
+	
+	if (bHideHPBarPermanently)
+	{
+		HPBarScreenWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC)
+	{
+		return;
+	}
+
+	FVector2D ScreenPosition;
+	const bool bProjected = PC->ProjectWorldLocationToScreen(GetHPBarWorldAnchorLocation(), ScreenPosition, true);
+
+	if (!bProjected)
+	{
+		HPBarScreenWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	int32 ViewportX = 0;
+	int32 ViewportY = 0;
+	PC->GetViewportSize(ViewportX, ViewportY);
+
+	if (ViewportX <= 0 || ViewportY <= 0)
+	{
+		return;
+	}
+
+	// 화면 아래쪽에 있는 유닛일수록 HP바를 조금 더 위로 올려서 몸을 덜 가리게 함
+	const float NormalizedY = ScreenPosition.Y / static_cast<float>(ViewportY);
+	const float ExtraLift = FMath::Lerp(0.f, MaxScreenLiftAtBottom, NormalizedY);
+
+	ScreenPosition += HPBarScreenOffset;
+	ScreenPosition.Y -= ExtraLift;
+
+	HPBarScreenWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	HPBarScreenWidget->SetPositionInViewport(ScreenPosition, true);
+}
+
 void ATFT_UnitCharacter::Initialize(const FTFT_ChampionData& Data, int32 StarLevel)
 {
-	
 	ChampionData = ConvertToChampionData(Data);
 	
 	if (StatComponent)
@@ -137,7 +256,6 @@ void ATFT_UnitCharacter::Initialize(const FTFT_ChampionData& Data, int32 StarLev
 
 void ATFT_UnitCharacter::InitializeMesh()
 {
-	// Champion Type을 바꾸면 메시 설정
 	FString Name = GetChampionNameString();
 	if (Name.IsEmpty()) return;
 	
@@ -154,7 +272,6 @@ void ATFT_UnitCharacter::InitializeMesh()
 		UE_LOG(LogTemp, Warning, TEXT("Failed to load mesh: %s"), *Path);
 	}
 	
-	// 메시 설정 후 애니메이션 블루프린트도 설정
 	FString AnimPath = FString::Printf(TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s_Skeleton_AnimBlueprint.%s_Skeleton_AnimBlueprint_C"), *Name, *Name, *Name);
 
 	if (UClass* AnimClass = LoadObject<UClass>(nullptr, *AnimPath))
@@ -177,7 +294,6 @@ void ATFT_UnitCharacter::InitializeMesh()
 		AttackMontage = Montage;
 	}
 	
-	// DeathMontage
 	FString DeathMontagePath = FString::Printf(
 	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Death_Montage.Death_Montage"), *Name);
 	
@@ -187,7 +303,6 @@ void ATFT_UnitCharacter::InitializeMesh()
 		DeathMontage = TempMontage;
 	}
 	
-	// DanceMontage
 	FString DanceMontagePath = FString::Printf(
 	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Dance_Montage.Dance_Montage"), *Name);
 	
@@ -197,7 +312,6 @@ void ATFT_UnitCharacter::InitializeMesh()
 		DanceMontage = TempMontage;
 	}
 	
-	// SkillMontage
 	FString SkillMontagePath = FString::Printf(
 	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/Skill_Montage.Skill_Montage"), *Name);
 	
@@ -213,7 +327,6 @@ void ATFT_UnitCharacter::InitWithChampionKey(ETFT_ChampionKey InChampionKey, int
 	ChampionKey = InChampionKey;
 	starLevel = InStarLevel;
 	
-	// Data Table에서 Champion Data 가져오기
 	UTFT_GameInstance* GI = GetWorld()->GetGameInstance<UTFT_GameInstance>();
 	UDataTable* Table = GI->ChampionDataTable.LoadSynchronous();
 	FName RowName = ConvertEnumToRowName(ChampionKey);
@@ -227,24 +340,15 @@ void ATFT_UnitCharacter::InitWithChampionKey(ETFT_ChampionKey InChampionKey, int
 	}
 
 	Initialize(*Data, starLevel);
-	
-	// 메시 & 애니메이션 블루프린트 설정
 	InitializeMesh();
-	
-	// combat component에 owner 캐릭터 설정
 	CombatComponent->OwnerCharacter = this;
 	
-	// HP Bar Widget 연결
-	if (HPBarWidgetComponent)
+	if (HPBarScreenWidget)
 	{
-		if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
-		{
-			HPWidget->SetOwnerCharacter(this);
-			HPWidget->BP_UpdateStarFrame(starLevel);
-		}
+		HPBarScreenWidget->SetOwnerCharacter(this);
+		HPBarScreenWidget->BP_UpdateStarFrame(starLevel);
 	}
 }
-
 
 FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_ChampionData& Data)
 {
@@ -257,7 +361,6 @@ FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_Champi
 	Result.Origins = FName(*Data.Origins);
 	Result.Classes = FName(*Data.Classes);
 
-	// Stats
 	Result.Stats.AttackDamage = Data.AttackDamage;
 	Result.Stats.AbilityPower = Data.AbilityPower;
 	Result.Stats.AttackRange = Data.AttackRange;
@@ -270,13 +373,12 @@ FStruct_TFT_Champion ATFT_UnitCharacter::ConvertToChampionData(const FTFT_Champi
 	Result.Stats.StartingMana = Data.StartingMana;
 	Result.Stats.MaxMana = Data.MaxMana;
 
-	// Skill
 	Result.Skill.Name = Data.SkillName;
 	Result.Skill.Type = Data.SkillType;
 	Result.Skill.Description = Data.SkillDescription;
 	Result.Skill.Image = Data.SkillImage;
+	Result.Skill.Effect = Data.SkillEffect;
 
-	// SkillStats 파싱
 	TArray<FString> Split;
 	Data.SkillStats.ParseIntoArray(Split, TEXT("/"));
 	for (const FString& Str : Split)
@@ -322,25 +424,35 @@ void ATFT_UnitCharacter::StopMontage(float BlendOutTime)
 
 void ATFT_UnitCharacter::UpdateHPBarWidget()
 {
-	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	if (bHideHPBarPermanently)
 	{
-		HPWidget->UpdateHPBar();
+		return;
+	}
+
+	if (HPBarScreenWidget)
+	{
+		HPBarScreenWidget->UpdateHPBar();
 	}
 }
 
 void ATFT_UnitCharacter::UpdateMPBarWidget()
 {
-	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	if (bHideHPBarPermanently)
 	{
-		HPWidget->UpdateMPBar();
+		return;
+	}
+
+	if (HPBarScreenWidget)
+	{
+		HPBarScreenWidget->UpdateMPBar();
 	}
 }
 
 void ATFT_UnitCharacter::HPBarWidgetVisible(bool bIsVisible)
 {
-	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	if (HPBarScreenWidget)
 	{
-		HPWidget->SetVisibility(bIsVisible ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		HPBarScreenWidget->SetVisibility(bIsVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 }
 
@@ -355,9 +467,9 @@ FString ATFT_UnitCharacter::GetChampionNameString()
 FString ATFT_UnitCharacter::BuildMeshPath(const FString& Name)
 {
 	return FString::Printf(
-	TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s.%s"),
-	*Name, *Name, *Name
-);
+		TEXT("/Game/SHIN/Data/Models/%s/SkeletalMeshes/%s.%s"),
+		*Name, *Name, *Name
+	);
 }
 
 void ATFT_UnitCharacter::PlayAttackMontageByInterval(float AttackRate)
@@ -387,23 +499,28 @@ void ATFT_UnitCharacter::PlayAttackMontageByInterval(float AttackRate)
 		UE_LOG(LogTemp, Warning, TEXT("%s AttackMontage length is invalid."), *GetChampionNameString());
 		return;
 	}
-
-	// AttackRate = 초당 공격 횟수
-	// 공격 1회의 주기 = 1 / AttackRate
-	// 그 주기에 맞게 몽타주 재생속도 계산
+	
 	const float PlayRate = MontageLength * AttackRate;
-
 	AnimInstance->Montage_Play(AttackMontage, PlayRate);
 }
 
 void ATFT_UnitCharacter::PlayDeathMontage()
 {
+	bHideHPBarPermanently = true;
+
+	if (HPBarScreenWidget)
+	{
+		HPBarScreenWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	
 	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	if (!AnimInstance)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
 		return;
 	}
+	
+	UGameplayStatics::PlaySound2D(this, DeathSound);
 	
 	AnimInstance->Montage_Play(DeathMontage);
 }
@@ -417,7 +534,6 @@ void ATFT_UnitCharacter::PlayDanceMontage()
 		return;
 	}
 	
-	// 몽타주 수동으로 멈출때까지 반복 재생하도록 설정
 	AnimInstance->Montage_Play(DanceMontage, 1.f, EMontagePlayReturnType::MontageLength, 0.f, true);
 }
 
@@ -429,6 +545,8 @@ void ATFT_UnitCharacter::PlaySkillMontage()
 		UE_LOG(LogTemp, Warning, TEXT("%s has no AnimInstance."), *GetChampionNameString());
 		return;
 	}
+	
+	UGameplayStatics::PlaySound2D(this, SkillSound);
 	
 	AnimInstance->Montage_Play(SkillMontage);
 }
@@ -467,6 +585,13 @@ bool ATFT_UnitCharacter::TryEquipItem(const FStruct_TFTItemInstance& ItemInstanc
 	{
 		return false;
 	}
+	
+	
+	if (!bIsEnemy) // 적군이 아닐때만 사운드 재생
+	{
+		UGameplayStatics::PlaySound2D(this, ItemEquipSound);
+	}
+
 
 	UTFT_GameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UTFT_GameInstance>() : nullptr;
 	if (!GI)
@@ -503,9 +628,9 @@ bool ATFT_UnitCharacter::TryEquipItem(const FStruct_TFTItemInstance& ItemInstanc
 
 void ATFT_UnitCharacter::RefreshItemSlotWidget()
 {
-	if (UTFT_HPBarWidget* HPWidget = Cast<UTFT_HPBarWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	if (HPBarScreenWidget)
 	{
-		HPWidget->RefreshItemSlots();
+		HPBarScreenWidget->RefreshItemSlots();
 	}
 }
 
@@ -539,13 +664,11 @@ UTexture2D* ATFT_UnitCharacter::GetItemIconByItemId(FName ItemId) const
 
 void ATFT_UnitCharacter::ItemTest()
 {
-	// Item Test
 	FStruct_TFTItemInstance TestItem;
 	TestItem.ItemId = TEXT("LordsEdge");
 	TryEquipItem(TestItem);
 }
 
-// modifier Helper 함수
 TArray<FBaseModifier> ATFT_UnitCharacter::BuildItemModifiers(const FStruct_TFTItemDefinition& ItemDef, UObject* Source)
 {
 	TArray<FBaseModifier> Result;

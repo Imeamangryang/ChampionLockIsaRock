@@ -3,6 +3,8 @@
 #include "SHIN/Character/Components/TFT_StatComponent.h"
 #include "SHIN/Actors/TFT_DamageTextActor.h"
 #include "Components/SceneComponent.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 
 ATFT_SkillProjectile::ATFT_SkillProjectile()
 {
@@ -11,7 +13,17 @@ ATFT_SkillProjectile::ATFT_SkillProjectile()
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 
+	SkillEffectComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("SkillEffectComponent"));
+	SkillEffectComponent->SetupAttachment(Root);
+	SkillEffectComponent->bAutoActivate = false;
+
 	InitialLifeSpan = 0.f;
+	
+	ConstructorHelpers::FObjectFinder<UNiagaraSystem> DefaultEffectAsset(TEXT("/Game/VFX/sA_Megapack_v1/sA_SkillSet_1/Fx/NiagaraSystems/NS_Projectile1.NS_Projectile1"));
+	if (DefaultEffectAsset.Succeeded())
+	{
+		SkillEffectComponent->SetAsset(DefaultEffectAsset.Object);
+	}
 }
 
 void ATFT_SkillProjectile::BeginPlay()
@@ -24,11 +36,28 @@ void ATFT_SkillProjectile::BeginPlay()
 void ATFT_SkillProjectile::InitializeProjectile(
 	ATFT_UnitCharacter* InCaster,
 	ATFT_UnitCharacter* InTarget,
+	int32 InDamage,
+	UNiagaraSystem* InEffect)
+{
+	Caster = InCaster;
+	Target = InTarget;
+	Damage = InDamage;
+
+	if (SkillEffectComponent && InEffect)
+	{
+		SkillEffectComponent->SetAsset(InEffect);
+		SkillEffectComponent->Activate(true);
+	}
+}
+
+void ATFT_SkillProjectile::InitializeBasicProjectile(ATFT_UnitCharacter* InCaster, ATFT_UnitCharacter* InTarget,
 	int32 InDamage)
 {
 	Caster = InCaster;
 	Target = InTarget;
 	Damage = InDamage;
+	
+	SkillEffectComponent->Activate(true);
 }
 
 void ATFT_SkillProjectile::Tick(float DeltaTime)
@@ -47,7 +76,7 @@ void ATFT_SkillProjectile::Tick(float DeltaTime)
 	}
 
 	const FVector CurrentLocation = GetActorLocation();
-	const FVector TargetLocation = Target->GetActorLocation() + FVector(0.f, 0.f, 80.f);
+	const FVector TargetLocation = Target->GetActorLocation() + FVector(0.f, 0.f, 50.f);
 
 	FVector MoveDirection = TargetLocation - CurrentLocation;
 	const float Distance = MoveDirection.Size();

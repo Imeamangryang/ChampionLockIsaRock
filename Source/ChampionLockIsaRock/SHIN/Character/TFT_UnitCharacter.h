@@ -9,6 +9,8 @@
 #include "TFT_UnitCharacter.generated.h"
 
 struct FTFT_ChampionData;
+class UTFT_HPBarWidget;
+class USoundBase;
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATFT_UnitCharacter : public ACharacter
@@ -45,23 +47,48 @@ public:
 	
 	static TArray<FBaseModifier> BuildItemModifiers(const FStruct_TFTItemDefinition& ItemDef, UObject* Source);
 	
-	UFUNCTION(blueprintCallable, Category="TFT|Item")
+	UFUNCTION(BlueprintCallable, Category="TFT|Item")
 	void ItemTest();
-	
 
 protected:
 	virtual void BeginPlay() override;
-	
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	
 	// FTFT_ChampionData -> FStruct_TFT_Champion 변환
 	static FStruct_TFT_Champion ConvertToChampionData(const FTFT_ChampionData& Data);
 	static FName ConvertEnumToRowName(ETFT_ChampionKey Key);
 
+	// 화면 좌표 기반 HP바 생성/위치 갱신
+	void CreateHPBarWidget();
+	void UpdateHPBarScreenPosition();
+	FVector GetHPBarWorldAnchorLocation() const;
+
+protected:
+	// HPBar 화면 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, Category="TFT|UI")
+	TSubclassOf<UTFT_HPBarWidget> HPBarWidgetClass;
+
+	// 실제 화면에 올라간 HPBar 위젯
+	UPROPERTY()
+	TObjectPtr<UTFT_HPBarWidget> HPBarScreenWidget;
+
+	// 월드 기준 앵커 위치(머리 위)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|UI")
+	FVector HPBarWorldOffset = FVector(0.f, 0.f, -40.f);
+
+	// 화면 기준 추가 오프셋
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|UI")
+	FVector2D HPBarScreenOffset = FVector2D(0.f, 0.f);
+
+	// 화면 아래쪽일수록 조금 더 위로 올리는 최대 추가 보정치
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TFT|UI")
+	float MaxScreenLiftAtBottom = 30.f;
+	
+
 
 public:
 	virtual void Tick(float DeltaTime) override;
-
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="TFT|Item")
@@ -105,10 +132,6 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class UTFT_CombatComponent* CombatComponent;
 	
-	// HPBar Widget
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	class UWidgetComponent* HPBarWidgetComponent;
-	
 	// Attack Montage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	class UAnimMontage* AttackMontage;
@@ -122,6 +145,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	class UAnimMontage* SkillMontage;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	USoundBase* DeathSound = nullptr;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	USoundBase* AttackSound = nullptr;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	USoundBase* SkillSound = nullptr;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	USoundBase* ItemEquipSound = nullptr;
 	
 	// Enemy 여부 (적이면 true, 아군이면 false)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -132,4 +166,7 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsBenched = true;
+	
+	UPROPERTY()
+	bool bHideHPBarPermanently = false;
 };

@@ -4,12 +4,14 @@
 #include "Dong/Public/TFTPlayerState.h"
 #include "Dong/Public/TopDownController.h"
 #include "SHIN/Subsystem/TFT_UISubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "UObject/ConstructorHelpers.h"
 
 ATFTPlayerState::ATFTPlayerState()
 {
 	// 초기값 설정 (TFT 시험 모드 기준)
-	PlayerGold = 100;
-	PlayerLevel = 1;
+	PlayerGold = 10;
+	PlayerLevel = 3;
 	CurrentXP = 0;
 	UpdateMaxXP(); // 레벨 1의 MaxXP 설정
 }
@@ -66,6 +68,11 @@ void ATFTPlayerState::AddXP(int32 Amount)
 	// 레벨이 올랐는지 확인
 	if (OldLevel != PlayerLevel)
 	{
+		if (SoundLevelUp)
+		{
+			UGameplayStatics::PlaySound2D(this, SoundLevelUp);
+		}
+		
 		if (auto* PC = Cast<ATopDownController>(GetWorld()->GetFirstPlayerController()))
 		{
 			PC->BroadcastUnitCount();

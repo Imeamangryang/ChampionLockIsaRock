@@ -6,6 +6,8 @@
 
 class ATFT_UnitCharacter;
 class USceneComponent;
+class UNiagaraComponent;
+class UNiagaraSystem;
 
 UCLASS()
 class CHAMPIONLOCKISAROCK_API ATFT_SkillProjectile : public AActor
@@ -20,6 +22,13 @@ public:
 	void InitializeProjectile(
 		ATFT_UnitCharacter* InCaster,
 		ATFT_UnitCharacter* InTarget,
+		int32 InDamage,
+		UNiagaraSystem* InEffect
+	);
+	
+	void InitializeBasicProjectile(
+		ATFT_UnitCharacter* InCaster,
+		ATFT_UnitCharacter* InTarget,
 		int32 InDamage
 	);
 
@@ -32,6 +41,9 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	USceneComponent* Root;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Projectile")
+	TObjectPtr<UNiagaraComponent> SkillEffectComponent;
+
 	UPROPERTY()
 	ATFT_UnitCharacter* Caster;
 
@@ -42,7 +54,7 @@ protected:
 	float MoveSpeed = 900.f;
 
 	UPROPERTY(EditAnywhere, Category="Projectile")
-	float HitRadius = 50.f;
+	float HitRadius = 10.f;
 
 	UPROPERTY(EditAnywhere, Category="Projectile")
 	float MaxLifetime = 5.f;
