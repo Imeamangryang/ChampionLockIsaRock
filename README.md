@@ -12,7 +12,7 @@ ChampionLockIsaRock는 Unreal Engine 5.7 기반으로 제작된 TFT 스타일 �
 
 ## 결과물 링크
 
-- **플레이 영상 / 빌드 링크** : 추후 추가
+- **플레이 영상** : [Youtube 링크](https://youtu.be/tKIgw4WGf-0)
 
 ## 개발 환경
 
